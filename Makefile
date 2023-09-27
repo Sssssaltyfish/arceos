@@ -152,7 +152,8 @@ build: $(OUT_DIR) $(OUT_BIN)
 disasm:
 	$(OBJDUMP) $(OUT_ELF) | less
 
-run: build justrun
+run: build
+	$(call run_qemu)
 
 justrun:
 	$(call run_qemu)
