@@ -45,6 +45,7 @@ BLK ?= n
 NET ?= n
 GRAPHIC ?= n
 BUS ?= mmio
+RISCV_BIOS ?= $(shell realpath ./platforms/riscv/fw_dynamic.bin)
 
 DISK_IMG ?= disk.img
 QEMU_LOG ?= n
