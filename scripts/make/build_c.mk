@@ -1,3 +1,6 @@
+include scripts/make/cargo.mk
+include scripts/make/features.mk
+
 rust_lib_name := axlibc
 rust_lib := target/$(TARGET)/$(MODE)/lib$(rust_lib_name).a
 
@@ -53,7 +56,9 @@ _check_need_rebuild: $(obj_dir)
 $(obj_dir):
 	$(call run_cmd,mkdir,-p $@)
 
-$(obj_dir)/%.o: $(src_dir)/%.c $(last_cflags)
+$(last_cflags): _check_need_rebuild
+
+$(ulib_obj): $(obj_dir)/%.o: $(src_dir)/%.c $(last_cflags)
 	$(call run_cmd,$(CC),$(CFLAGS) -c -o $@ $<)
 
 $(c_lib): $(obj_dir) _check_need_rebuild $(ulib_obj)
@@ -67,6 +72,8 @@ app-objs := $(addprefix $(APP)/,$(app-objs))
 
 $(APP)/%.o: $(APP)/%.c $(ulib_hdr)
 	$(call run_cmd,$(CC),$(CFLAGS) $(APP_CFLAGS) -c -o $@ $<)
+
+$(rust_lib): _cargo_build
 
 $(OUT_ELF): $(c_lib) $(rust_lib) $(libgcc) $(app-objs)
 	@printf "    $(CYAN_C)Linking$(END_C) $(OUT_ELF)\n"
