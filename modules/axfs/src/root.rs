@@ -49,6 +49,7 @@ impl RootDirectory {
     }
 
     pub fn mount(&self, path: &str, fs: Arc<dyn VfsOps>) -> AxResult {
+        log::info!("mount fs at {}", path);
         if path == "/" {
             return ax_err!(InvalidInput, "cannot mount root filesystem");
         }
@@ -67,6 +68,7 @@ impl RootDirectory {
 
     #[allow(unused)]
     pub fn umount(&self, path: &str) -> AxResult {
+        log::info!("unmount fs at {}", path);
         self.mounts.lock().retain(|mp| mp.path != path);
         Ok(())
     }

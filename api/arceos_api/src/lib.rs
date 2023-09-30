@@ -154,6 +154,8 @@ pub mod fs {
         pub type AxDisk;
         #[cfg(feature = "myfs")]
         pub type MyFileSystemIf;
+
+        pub type AxMountFlag;
     }
 
     define_api! {
@@ -218,6 +220,18 @@ pub mod fs {
         pub fn ax_current_dir() -> AxResult<alloc::string::String>;
         /// Changes the current working directory to the specified path.
         pub fn ax_set_current_dir(path: &str) -> AxResult;
+
+        /// Mounts a given filesystem at given path,
+        /// follows unix [`mount(2)`](https://man7.org/linux/man-pages/man2/mount.2.html) definition.
+        pub fn ax_mount(
+            source: &str,
+            target: &str,
+            ty: &str,
+            flag: AxMountFlag,
+            data: Option<&[u8]>,
+        ) -> AxResult;
+        /// Unmounts filesystem at given path.
+        pub fn ax_umount(path: &str) -> AxResult;
     }
 }
 
