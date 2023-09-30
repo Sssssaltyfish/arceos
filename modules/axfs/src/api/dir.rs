@@ -95,7 +95,7 @@ impl<'a> DirEntry<'a> {
     /// The full path is created by joining the original path to `read_dir`
     /// with the filename of this entry.
     pub fn path(&self) -> String {
-        String::from(self.dir_path.trim_end_matches('/')) + "/" + &self.entry_name
+        String::from(self.dir_path.trim_end_matches('/')) + "/" + self.entry_name.as_str()
     }
 
     /// Returns the bare file name of this directory entry without any other

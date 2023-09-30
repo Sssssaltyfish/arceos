@@ -35,6 +35,12 @@ axdriver = { path = "../axdriver", features = ["block"] }
 axsync = { path = "../axsync" }
 crate_interface = { path = "../../crates/crate_interface", optional = true }
 
+axnet = { path = "../axnet", optional = true }
+axtask = { path = "../axtask", optional = true, features = ["multitask"] }
+
+bitflags = "2.2"
+smartstring = { version = "1.0", default-features = false }
+
 [dependencies.fatfs]
 git = "https://github.com/rafalh/rust-fatfs"
 rev = "a3a834e"
