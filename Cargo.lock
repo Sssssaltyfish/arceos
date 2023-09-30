@@ -327,6 +327,7 @@ dependencies = [
  "axnet",
  "axsync",
  "axtask",
+ "bitflags 2.4.0",
  "capability",
  "cfg-if",
  "crate_interface",
@@ -334,6 +335,7 @@ dependencies = [
  "fatfs",
  "lazy_init",
  "log",
+ "smartstring",
 ]
 
 [[package]]
@@ -1707,6 +1709,17 @@ name = "slab_allocator"
 version = "0.3.1"
 dependencies = [
  "buddy_system_allocator",
+]
+
+[[package]]
+name = "smartstring"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fb72c633efbaa2dd666986505016c32c3044395ceaf881518399d2f4127ee29"
+dependencies = [
+ "autocfg",
+ "static_assertions",
+ "version_check",
 ]
 
 [[package]]

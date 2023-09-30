@@ -2,11 +2,13 @@ use alloc::string::String;
 use axerrno::AxResult;
 use axfs::fops::{Directory, File};
 
+pub use axfs::api::MountFlag as AxMountFlag;
 pub use axfs::fops::DirEntry as AxDirEntry;
 pub use axfs::fops::FileAttr as AxFileAttr;
 pub use axfs::fops::FilePerm as AxFilePerm;
 pub use axfs::fops::FileType as AxFileType;
 pub use axfs::fops::OpenOptions as AxOpenOptions;
+
 pub use axio::SeekFrom as AxSeekFrom;
 
 #[cfg(feature = "myfs")]
@@ -84,4 +86,18 @@ pub fn ax_current_dir() -> AxResult<String> {
 
 pub fn ax_set_current_dir(path: &str) -> AxResult {
     axfs::api::set_current_dir(path)
+}
+
+pub fn ax_mount(
+    source: &str,
+    target: &str,
+    ty: &str,
+    flag: AxMountFlag,
+    data: Option<&[u8]>,
+) -> AxResult {
+    axfs::api::mount(source, target, ty, flag, data)
+}
+
+pub fn umount(path: &str) -> AxResult {
+    axfs::api::umount(path)
 }
