@@ -95,9 +95,11 @@ pub fn ax_mount(
     flag: AxMountFlag,
     data: Option<&[u8]>,
 ) -> AxResult {
-    axfs::api::mount(source, target, ty, flag, data)
+    let ret = axfs::api::mount(source, target, ty, flag, data)?;
+    Ok(ret)
 }
 
-pub fn umount(path: &str) -> AxResult {
-    axfs::api::umount(path)
+pub fn ax_umount(path: &str) -> AxResult {
+    let ret = axfs::api::umount(path)?;
+    Ok(ret)
 }
