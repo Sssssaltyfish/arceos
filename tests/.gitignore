@@ -1,0 +1,4 @@
+*.bin
+*.elf
+*.stderr.log
+*.stdout.log

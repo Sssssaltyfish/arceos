@@ -1,0 +1,4 @@
+MANIFEST=$(dirname ${BASH_SOURCE[0]})/main/Cargo.toml
+
+cargo test --manifest-path $MANIFEST -- --include-ignored --show-output --nocapture
+EXIT_STATUS=$?
