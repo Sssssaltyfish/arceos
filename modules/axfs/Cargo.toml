@@ -39,7 +39,19 @@ axnet = { path = "../axnet", optional = true }
 axtask = { path = "../axtask", optional = true, features = ["multitask"] }
 
 bitflags = "2.2"
-smartstring = { version = "1.0", default-features = false }
+compact_str = { version = "0.8.0-beta", default-features = false }
+
+[dependencies.serde]
+version = "1.0.188"
+optional = true
+default-features = false
+features = ["derive", "alloc", "rc"]
+
+[dependencies.bincode]
+version = "2.0.0-rc.3"
+optional = true
+default-features = false
+features = ["alloc", "derive", "serde"]
 
 [dependencies.fatfs]
 git = "https://github.com/rafalh/rust-fatfs"

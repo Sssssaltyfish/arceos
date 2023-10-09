@@ -14,7 +14,7 @@ static CURRENT_DIR_PATH: Mutex<String> = Mutex::new(String::new());
 static CURRENT_DIR: LazyInit<Mutex<VfsNodeRef>> = LazyInit::new();
 
 struct MountPoint {
-    path: smartstring::alias::String,
+    path: compact_str::CompactString,
     fs: Arc<dyn VfsOps>,
 }
 
@@ -66,7 +66,6 @@ impl RootDirectory {
         Ok(())
     }
 
-    #[allow(unused)]
     pub fn umount(&self, path: &str) -> AxResult {
         log::info!("unmount fs at {}", path);
         self.mounts.lock().retain(|mp| mp.path != path);
