@@ -20,6 +20,7 @@ net = ["dep:axnet", "axfeat/net"]
 display = ["dep:axdisplay", "axfeat/display"]
 
 myfs = ["axfeat/myfs"]
+distfs = ["axfeat/distfs"]
 
 # Use dummy functions if the feature is not enabled
 dummy-if-not-enabled = []
