@@ -6,3 +6,4 @@
 actual.out
 qemu.log
 rusty-tags.vi
+aarch64-linux-musl-cross
