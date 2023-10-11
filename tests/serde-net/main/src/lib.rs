@@ -44,19 +44,23 @@ fn test_arch(arch: &str, timeout: Duration) -> anyhow::Result<()> {
     let record_stdout = File::create(arceos_path.join(format!("arceos_{}.stdout.log", arch)))?;
     let record_stderr = File::create(arceos_path.join(format!("arceos_{}.stderr.log", arch)))?;
 
+    let args = [
+        "-C".to_owned(),
+        root.path_to_str()?,
+        "run".to_owned(),
+        format!("APP={}", arceos_path.path_to_str()?),
+        "NET=y".to_owned(),
+        format!("ARCH={}", arch),
+    ];
+
     info!("Building arceos app");
     let mut arceos = process::Command::new("make")
-        .args([
-            "-C".to_owned(),
-            root.path_to_str()?,
-            "run".to_owned(),
-            format!("APP={}", arceos_path.path_to_str()?),
-            "NET=y".to_owned(),
-            format!("ARCH={}", arch),
-        ])
+        .args(args)
         .stdout(record_stdout)
         .stderr(record_stderr)
         .spawn()?;
+
+    std::thread::sleep(Duration::from_secs(10));
 
     info!("Trying to connect to arceos app");
     let start = Instant::now();
@@ -94,15 +98,19 @@ fn test_all_archs() -> anyhow::Result<()> {
 
     let archs = ["x86_64", "aarch64", "riscv64"];
 
+    let mut ret = Ok(());
+
     for arch in archs {
         info!("Testing {}", arch);
-        let ret = test_arch(arch, Duration::from_secs(10));
-        if let Err(e) = ret {
-            error!("Error while testing {}: {}", arch, e);
+        let test_ret = test_arch(arch, Duration::from_secs(10));
+        if let Err(e) = test_ret {
+            let err = format!("Error while testing {}: {}", arch, e);
+            error!("{}", err);
+            ret = Err(anyhow::anyhow!(err));
         } else {
             info!("Test of {} done!", arch);
         }
     }
 
-    Ok(())
+    ret
 }
