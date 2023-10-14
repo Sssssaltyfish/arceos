@@ -1,3 +1,5 @@
+use num_enum::TryFromPrimitive;
+
 /// Filesystem attributes.
 ///
 /// Currently not used.
@@ -47,7 +49,7 @@ bitflags::bitflags! {
 
 /// Node (file/directory) type.
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, TryFromPrimitive)]
 pub enum VfsNodeType {
     /// FIFO (named pipe)
     Fifo = 0o1,
