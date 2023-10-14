@@ -1,5 +1,3 @@
-use core::mem;
-
 use alloc::sync::{Arc, Weak};
 use axerrno::{ax_err_type, AxResult};
 use axfs_vfs::{
@@ -122,7 +120,7 @@ impl VfsNodeOps for NodeWrapper {
 
     fn lookup(self: Arc<Self>, path: &str) -> VfsResult<VfsNodeRef> {
         let conn = self.try_getconn()?;
-        send_fsop(Request::new(&self.relpath, Action::GetParent), &conn)?;
+        send_fsop(Request::new(&self.relpath, request::Lookup { path }.into()), &conn)?;
         let relpath = recv_fsop_serde(&conn)?;
 
         Ok(Arc::new(self.with_path(relpath)))
