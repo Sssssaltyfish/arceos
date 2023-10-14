@@ -46,7 +46,9 @@ pub mod path;
 use alloc::sync::Arc;
 use axerrno::{ax_err, AxError, AxResult};
 
-pub use self::structs::{FileSystemInfo, VfsDirEntry, VfsNodeAttr, VfsNodePerm, VfsNodeType};
+pub use self::structs::{
+    FileSystemInfo, TryFromPrimitive, VfsDirEntry, VfsNodeAttr, VfsNodePerm, VfsNodeType,
+};
 
 /// A wrapper of [`Arc<dyn VfsNodeOps>`].
 pub type VfsNodeRef = Arc<dyn VfsNodeOps>;
@@ -170,10 +172,10 @@ pub trait VfsNodeOps: Send + Sync {
     }
 
     /// Create a new node with given `path` in the directory, recursively.
-    /// 
+    ///
     /// Default implementation `create`s all prefix sub-paths sequentially,
     /// implementor may provide a more efficient impl.
-    /// 
+    ///
     /// Return [`Ok(())`](Ok) if already exists.
     fn create_recursive(&self, path: &str, ty: VfsNodeType) -> VfsResult {
         if path.starts_with('/') {

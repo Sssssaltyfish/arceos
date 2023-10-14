@@ -1,4 +1,4 @@
-use num_enum::TryFromPrimitive;
+pub use num_enum::TryFromPrimitive;
 
 /// Filesystem attributes.
 ///

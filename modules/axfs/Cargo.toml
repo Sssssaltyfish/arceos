@@ -40,7 +40,9 @@ axnet = { path = "../axnet", optional = true }
 axtask = { path = "../axtask", optional = true, features = ["multitask"] }
 
 bitflags = "2.2"
-compact_str = { version = "0.8.0-beta", default-features = false }
+compact_str = { version = "0.8.0-beta", default-features = false, features = [
+    "serde",
+] }
 
 [dependencies.serde]
 version = "1.0.188"
