@@ -20,6 +20,10 @@ struct MountPoint {
 
 struct RootDirectory {
     main_fs: Arc<dyn VfsOps>,
+    /// Because of the [`Mutex`] on `mounts`, operation inside
+    /// mounted fs should not interact with root directory,
+    /// as they mostly would locking the same mutex, leading to 
+    /// deadlock.
     mounts: Mutex<Vec<MountPoint>>,
 }
 

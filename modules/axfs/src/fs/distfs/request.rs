@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use super::tcpio::{TcpIO, BINCODE_CONFIG};
 
+pub type Response<T> = core::result::Result<T, i32>;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct NodeAttr {
     /// note that it shall mirror the repr of [VfsNodePerm](axfs_vfs::structs::VfsNodePerm)
