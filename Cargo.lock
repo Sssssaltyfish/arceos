@@ -344,6 +344,7 @@ dependencies = [
  "lazy_init",
  "log",
  "serde",
+ "spin 0.9.8",
 ]
 
 [[package]]

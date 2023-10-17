@@ -1,11 +1,24 @@
 use axerrno::{ax_err_type, AxResult};
+use axfs_vfs::{TryFromPrimitive, VfsDirEntry, VfsNodeType};
 use axnet::TcpSocket;
 use bincode::{Decode, Encode};
+use compact_str::CompactString;
 use serde::{Deserialize, Serialize};
 
 use super::tcpio::{TcpIO, BINCODE_CONFIG};
 
 pub type Response<T> = core::result::Result<T, i32>;
+
+pub(super) trait NodeTypeFromPrimitive: Copy {
+    fn to_node_type(self) -> AxResult<VfsNodeType>;
+}
+
+impl NodeTypeFromPrimitive for u8 {
+    fn to_node_type(self) -> AxResult<VfsNodeType> {
+        VfsNodeType::try_from_primitive(self)
+            .map_err(|e| ax_err_type!(InvalidData, format_args!("invalid type: {:#o}", e.number)))
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct NodeAttr {
@@ -15,6 +28,23 @@ pub struct NodeAttr {
     pub ty: u8,
     pub size: u64,
     pub blocks: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirEntry {
+    /// note that it shall mirror the repr of [VfsNodeType](axfs_vfs::structs::VfsNodeType)
+    pub ty: u8,
+    pub name: CompactString,
+}
+
+impl TryFrom<DirEntry> for VfsDirEntry {
+    type Error = axerrno::AxError;
+
+    fn try_from(value: DirEntry) -> Result<Self, Self::Error> {
+        let ty = value.ty.to_node_type()?;
+        let ret = Self::new(&value.name, ty);
+        Ok(ret)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
