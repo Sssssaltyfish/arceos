@@ -1,4 +1,4 @@
-use axerrno::ax_err;
+use axerrno::{ax_err, ax_err_type};
 use axio as io;
 
 bitflags::bitflags! {
@@ -71,10 +71,36 @@ pub fn mount(
     data: Option<&[u8]>,
 ) -> io::Result<()> {
     if !flag.is_empty() {
-        return ax_err!(Unsupported);
+        return ax_err!(Unsupported, "currently no mount flags are supported");
     }
+
+    if ty != "distfs" {
+        return ax_err!(Unsupported, "currently the only supported fs is `distfs`");
+    }
+
+    #[cfg(feature = "distfs")]
+    {
+        use crate::fs::distfs::DistFileSystem;
+
+        use axnet::TcpSocket;
+        use core::net::{SocketAddr, SocketAddrV4};
+        use alloc::sync::Arc;
+
+        let conn = TcpSocket::new();
+        let addr = source
+            .parse()
+            .map_err(|err| ax_err_type!(InvalidInput, format_args!("{}: {}", err, source)))?;
+        let addr = SocketAddr::V4(addr);
+        conn.connect(addr)?;
+
+        let fs = Arc::new(DistFileSystem::new(conn));
+
+        crate::root::mount(target, fs)?;
+        return Ok(());
+    }
+
     crate::root::mount;
-    unimplemented!()
+    ax_err!(Unsupported, "no distfs feature")
 }
 
 pub fn umount(path: &str) -> io::Result<()> {

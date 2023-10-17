@@ -20,6 +20,7 @@
 //! [`MyFileSystemIf`]: fops::MyFileSystemIf
 
 #![cfg_attr(all(not(test), not(doc)), no_std)]
+#![cfg_attr(feature = "distfs", feature(ip_in_core))]
 #![feature(doc_auto_cfg)]
 
 #[macro_use]
