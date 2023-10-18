@@ -1,4 +1,4 @@
-use axerrno::{ax_err, ax_err_type};
+use axerrno::ax_err;
 use axio as io;
 
 bitflags::bitflags! {
@@ -83,6 +83,7 @@ pub fn mount(
         use crate::fs::distfs::DistFileSystem;
 
         use axnet::TcpSocket;
+        use axerrno::ax_err_type;
         use core::net::{SocketAddr, SocketAddrV4};
         use alloc::sync::Arc;
 

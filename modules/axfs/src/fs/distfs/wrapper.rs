@@ -1,14 +1,15 @@
 use alloc::sync::{Arc, Weak};
 use axerrno::{ax_err_type, AxError, AxResult};
 use axfs_vfs::{
-    TryFromPrimitive, VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodePerm, VfsNodeRef, VfsNodeType,
-    VfsResult,
+    VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodePerm, VfsNodeRef, VfsNodeType, VfsResult,
 };
-use axnet::TcpSocket;
 use compact_str::{CompactString, ToCompactString};
 
 use super::{
-    request::{self, recv_fsop, recv_fsop_serde, send_fsop, Action, NodeAttr, Request, Response, NodeTypeFromPrimitive},
+    request::{
+        self, recv_fsop, recv_fsop_serde, send_fsop, Action, NodeAttr, NodeTypeFromPrimitive,
+        Request, Response,
+    },
     SharedData,
 };
 

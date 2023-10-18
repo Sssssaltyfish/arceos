@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 use axerrno::AxResult;
-use axfs_vfs::{VfsNodeOps, VfsNodeRef, VfsOps, VfsResult};
+use axfs_vfs::{VfsNodeRef, VfsOps, VfsResult};
 use axnet::TcpSocket;
 use spin::Once;
 
