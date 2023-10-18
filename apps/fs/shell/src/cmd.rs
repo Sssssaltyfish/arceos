@@ -284,6 +284,7 @@ fn do_mount(args: &str) {
                 Some(s) => s,
                 None => {
                     print_err!("mount", "missing argument", stringify!($name));
+                    println!("    Usage: mount <source> <target> <type> [flag [data]]");
                     return;
                 }
             }
