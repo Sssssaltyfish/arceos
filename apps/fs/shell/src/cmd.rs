@@ -7,10 +7,10 @@ use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 
 macro_rules! print_err {
     ($cmd: literal, $msg: expr) => {
-        println!("{}: {}", $cmd, $msg);
+        println!("{}: {}", $cmd, $msg)
     };
     ($cmd: literal, $arg: expr, $err: expr) => {
-        println!("{}: {}: {}", $cmd, $arg, $err);
+        println!("{}: {}: {}", $cmd, $arg, $err)
     };
 }
 
@@ -27,6 +27,7 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("pwd", do_pwd),
     ("rm", do_rm),
     ("uname", do_uname),
+    ("mount", do_mount),
 ];
 
 fn file_type_to_char(ty: FileType) -> char {
@@ -270,6 +271,48 @@ fn do_help(_args: &str) {
 fn do_exit(_args: &str) {
     println!("Bye~");
     std::process::exit(0);
+}
+
+#[cfg(feature = "axstd")]
+fn do_mount(args: &str) {
+    use std::os::arceos::api::fs::{ax_mount, AxMountFlag};
+
+    let mut args = args.split_ascii_whitespace();
+    macro_rules! expect_arg {
+        ( $name:ident ) => {
+            match args.next() {
+                Some(s) => s,
+                None => {
+                    print_err!("mount", "missing argument", stringify!($name));
+                    return;
+                }
+            }
+        };
+    }
+    let source = expect_arg!(source);
+    let target = expect_arg!(target);
+    let ty = expect_arg!(ty);
+    let flag = args
+        .next()
+        .and_then(|f| f.parse::<u32>().ok())
+        .map_or(Some(AxMountFlag::empty()), |bits| {
+            AxMountFlag::from_bits(bits)
+        });
+    let Some(flag) = flag else {
+        print_err!("mount", "wrong format", "flag");
+        return;
+    };
+    let data = args.next().map(|s| s.as_bytes());
+
+    match ax_mount(source, target, ty, flag, data) {
+        Ok(_) => println!("successfully mounted {} at {} ({})", source, target, ty),
+        Err(e) => print_err!("mount", e),
+    }
+}
+
+#[cfg(not(feature = "axstd"))]
+fn do_mount(_args: &str) {
+    print_err!("mount", "currently `mount` works only if `axstd` feature is enabled");
 }
 
 pub fn run_cmd(line: &[u8]) {
