@@ -1,3 +1,6 @@
 [submodule "patches/compact_str"]
 	path = patches/compact_str
-	url = https://github.com/ParkMyCar/compact_str.git
+	url = https://github.com/Sssssaltyfish/compact_str.git
+[submodule "patches/noline"]
+	path = patches/noline
+	url = https://github.com/Sssssaltyfish/noline.git
