@@ -3,7 +3,7 @@ use crate::{BufRead, Read, Result};
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec::Vec};
 
-const DEFAULT_BUF_SIZE: usize = 1024;
+use super::DEFAULT_BUF_SIZE;
 
 /// The `BufReader<R>` struct adds buffering to any reader.
 pub struct BufReader<R> {

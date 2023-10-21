@@ -25,7 +25,7 @@ mod ramfs;
 
 use std::{
     fs::{File, OpenOptions},
-    io::{self, prelude::*, BufReader, Stdin, Stdout},
+    io::{self, prelude::*, BufReader, BufWriter, Stdin, Stdout},
 };
 
 use noline::builder::EditorBuilder;
@@ -120,7 +120,7 @@ fn main() {
         }
     }
 
-    let mut history = prompt_history().unwrap();
+    let mut history = BufWriter::new(prompt_history().unwrap());
     for slice in editor.get_history() {
         for (_, &c) in slice {
             history.write_all(&[c]).unwrap();

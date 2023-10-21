@@ -14,7 +14,7 @@ mod impls;
 
 pub mod prelude;
 
-pub use self::buffered::BufReader;
+pub use self::buffered::*;
 pub use self::error::{Error, Result};
 
 #[cfg(feature = "alloc")]
