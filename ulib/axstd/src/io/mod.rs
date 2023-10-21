@@ -3,7 +3,10 @@
 mod stdio;
 
 pub use axio::prelude;
-pub use axio::{BufRead, BufReader, Error, Read, Seek, SeekFrom, Write};
+pub use axio::{BufRead, BufReader, Error, Lines, Read, Seek, SeekFrom, Write};
+
+#[cfg(feature = "alloc")]
+pub use axio::{BufWriter, IntoInnerError, WriterPanicked};
 
 #[doc(hidden)]
 pub use self::stdio::__print_impl;
