@@ -233,6 +233,25 @@ pub trait BufRead: Read {
     fn read_line(&mut self, buf: &mut String) -> Result<usize> {
         unsafe { append_to_string(buf, |b| self.read_until(b'\n', b)) }
     }
+
+    /// Returns an iterator over the lines of this reader.
+    ///
+    /// The iterator returned from this function will yield instances of
+    /// <code>[io::Result]<[String]></code>. Each string returned will *not* have a newline
+    /// byte (the `0xA` byte) or `CRLF` (`0xD`, `0xA` bytes) at the end.
+    ///
+    /// [io::Result]: self::Result "io::Result"
+    ///
+    /// # Errors
+    ///
+    /// Each line of the iterator has the same error semantics as [`BufRead::read_line`].
+    #[cfg(feature = "alloc")]
+    fn lines(self) -> Lines<Self>
+    where
+        Self: Sized,
+    {
+        Lines { buf: self }
+    }
 }
 
 #[cfg(feature = "alloc")]
@@ -257,4 +276,37 @@ pub struct PollState {
     pub readable: bool,
     /// Object can be writen now.
     pub writable: bool,
+}
+
+/// An iterator over the lines of an instance of `BufRead`.
+///
+/// This struct is generally created by calling [`lines`] on a `BufRead`.
+/// Please see the documentation of [`lines`] for more details.
+///
+/// [`lines`]: BufRead::lines
+#[derive(Debug)]
+pub struct Lines<B> {
+    buf: B,
+}
+
+#[cfg(feature = "alloc")]
+impl<B: BufRead> Iterator for Lines<B> {
+    type Item = Result<String>;
+
+    fn next(&mut self) -> Option<Result<String>> {
+        let mut buf = String::new();
+        match self.buf.read_line(&mut buf) {
+            Ok(0) => None,
+            Ok(_n) => {
+                if buf.ends_with('\n') {
+                    buf.pop();
+                    if buf.ends_with('\r') {
+                        buf.pop();
+                    }
+                }
+                Some(Ok(buf))
+            }
+            Err(e) => Some(Err(e)),
+        }
+    }
 }
