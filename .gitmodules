@@ -1,0 +1,3 @@
+[submodule "patches/compact_str"]
+	path = patches/compact_str
+	url = https://github.com/ParkMyCar/compact_str.git
