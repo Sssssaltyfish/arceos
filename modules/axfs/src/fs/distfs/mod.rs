@@ -6,9 +6,10 @@ use spin::Once;
 
 use self::wrapper::NodeWrapper;
 
-mod request;
 mod tcpio;
-mod wrapper;
+
+pub mod request;
+pub mod wrapper;
 
 struct SharedData {
     conn: TcpSocket,

@@ -37,6 +37,9 @@ pub mod fops;
 
 use axdriver::{prelude::*, AxDeviceContainer};
 
+#[cfg(feature = "distfs")]
+pub use fs::distfs;
+
 /// Initializes filesystems by block devices.
 pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
     info!("Initialize filesystems...");

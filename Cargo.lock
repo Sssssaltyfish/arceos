@@ -922,6 +922,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfs-host"
+version = "0.1.0"
+dependencies = [
+ "axfs",
+]
+
+[[package]]
 name = "driver_block"
 version = "0.1.0"
 dependencies = [

@@ -72,6 +72,8 @@ members = [
     "apps/task/tls",
 
     "tests/serde-net/*",
+
+    "tools/dfs-host/"
 ]
 
 [profile.release]
