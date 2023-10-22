@@ -1,7 +1,7 @@
 use axerrno::{ax_err_type, AxResult};
 use axfs_vfs::{TryFromPrimitive, VfsDirEntry, VfsNodeType};
 use axnet::TcpSocket;
-use bincode::{Decode, Encode};
+use bincode::{BorrowDecode, Decode, Encode};
 use compact_str::CompactString;
 use serde::{Deserialize, Serialize};
 
@@ -47,53 +47,53 @@ impl TryFrom<DirEntry> for VfsDirEntry {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Read {
     pub offset: u64,
     pub length: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Write<'write> {
     pub offset: u64,
     pub content: &'write [u8],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Trunc {
     pub size: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Lookup<'s> {
     pub path: &'s str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Create<'s> {
     pub path: &'s str,
     /// note that it must mirror the repr of [VfsNodeType](axfs_vfs::structs::VfsNodeType)
     pub ty: u8,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Remove<'s> {
     pub path: &'s str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct ReadDir {
     pub start_idx: u64,
     pub size: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Rename<'s> {
     pub src_path: &'s str,
     pub dst_path: &'s str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 #[repr(u8)]
 pub enum Action<'a> {
     Open,
@@ -150,7 +150,7 @@ impl_into_action!(
     Rename<'a>,
 );
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 pub struct Request<'s, 'a> {
     pub relpath: &'s str,
     pub action: Action<'a>,
@@ -195,7 +195,11 @@ mod test {
     type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
     #[test]
-    fn test_serde() -> Result<()> {
+    fn test_borrow() -> Result<()> {
+        let req = Request::new("./test", Remove { path: "some_path" }.into());
+        let buf = bincode::encode_to_vec(&req, BINCODE_CONFIG).unwrap();
+        let reconstruct: Request = bincode::borrow_decode_from_slice(&buf, BINCODE_CONFIG).unwrap().0;
+        assert_eq!(req, reconstruct);
         Ok(())
     }
 }
