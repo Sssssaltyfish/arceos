@@ -11,6 +11,8 @@ mod tcpio;
 pub mod request;
 pub mod wrapper;
 
+pub use tcpio::BINCODE_CONFIG;
+
 struct SharedData {
     conn: TcpSocket,
     parent: Once<VfsNodeRef>,

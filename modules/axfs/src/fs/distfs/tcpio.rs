@@ -5,7 +5,7 @@ use axnet::TcpSocket;
 use bincode::de::read::Reader;
 use bincode::enc::write::Writer;
 
-pub(super) const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
+pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
 
 pub(super) struct TcpIO<'a>(pub &'a TcpSocket);
 

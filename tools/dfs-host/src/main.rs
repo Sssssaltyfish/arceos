@@ -2,6 +2,7 @@ use host::DfsHost;
 use std::env;
 
 mod host;
+mod client_conn;
 
 fn main() {
     let mut host = DfsHost::new(env::current_dir().unwrap());

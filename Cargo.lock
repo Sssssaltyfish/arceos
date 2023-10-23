@@ -925,7 +925,9 @@ dependencies = [
 name = "dfs-host"
 version = "0.1.0"
 dependencies = [
+ "axerrno",
  "axfs",
+ "bincode",
 ]
 
 [[package]]
