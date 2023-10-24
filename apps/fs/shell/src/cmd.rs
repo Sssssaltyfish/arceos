@@ -28,6 +28,7 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("rm", do_rm),
     ("uname", do_uname),
     ("mount", do_mount),
+    ("umount", do_umount),
 ];
 
 fn file_type_to_char(ty: FileType) -> char {
@@ -313,7 +314,37 @@ fn do_mount(args: &str) {
 
 #[cfg(not(feature = "axstd"))]
 fn do_mount(_args: &str) {
-    print_err!("mount", "currently `mount` works only if `axstd` feature is enabled");
+    print_err!(
+        "mount",
+        "currently `mount` works only if `axstd` feature is enabled"
+    );
+}
+
+fn do_umount(args: &str) {
+    #[cfg(feature = "axstd")]
+    fn impl_umount(args: &str) {
+        use std::os::arceos::api::fs::ax_umount;
+
+        let args = args.trim();
+        if args.contains(char::is_whitespace) {
+            print_err!("umount", "too much arguments");
+            return;
+        }
+        match ax_umount(args) {
+            Ok(_) => println!("successfully unmounted {}", args),
+            Err(err) => print_err!("umount", err),
+        }
+    }
+
+    #[cfg(not(feature = "axstd"))]
+    fn impl_umount(_args: &str) {
+        print_err!(
+            "umount",
+            "currently `umount` works only if `axstd` feature is enabled"
+        );
+    }
+
+    impl_umount(args)
 }
 
 pub fn run_cmd(line: &[u8]) {
