@@ -20,6 +20,10 @@ struct MountPoint {
 
 struct RootDirectory {
     main_fs: Arc<dyn VfsOps>,
+    /// Because of the [`Mutex`] on `mounts`, operation inside
+    /// mounted fs should not interact with root directory,
+    /// as they mostly would locking the same mutex, leading to
+    /// deadlock.
     mounts: Mutex<Vec<MountPoint>>,
 }
 
@@ -68,8 +72,15 @@ impl RootDirectory {
 
     pub fn umount(&self, path: &str) -> AxResult {
         log::info!("unmount fs at {}", path);
-        self.mounts.lock().retain(|mp| mp.path != path);
-        Ok(())
+        let mut mounts = self.mounts.lock();
+        let pos = mounts.iter().position(|mp| mp.path == path);
+        match pos {
+            Some(pos) => {
+                mounts.swap_remove(pos);
+                Ok(())
+            }
+            None => ax_err!(NotFound, format_args!(r#"mount point "{}" not found"#, path)),
+        }
     }
 
     pub fn contains(&self, path: &str) -> bool {
