@@ -1,10 +1,9 @@
 use axerrno::{ax_err_type, AxResult};
 use axfs::distfs::request::Action::{
-    self, Lookup, Open as ActionOpen, Read as ActionRead, Write as ActionWrite,
+    self, Create, Lookup, Open as ActionOpen, Read as ActionRead, Write as ActionWrite,
 };
 use axfs::distfs::request::{NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
-use std::borrow::BorrowMut;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Result, Seek, SeekFrom, Write};
 use std::net::TcpStream;
@@ -47,11 +46,9 @@ impl DfsClientConn {
 
     pub fn handle_conn(&mut self) -> Result<()> {
         // mount 127.0.0.1:8000 /dist distfs
-        println!("handle conn!");
         // Continuously read data from the TcpStream and store it in the buff.
         loop {
             let read_res = self.read_data_from_conn();
-            println!("read_res: {:?}", read_res);
             match read_res {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
@@ -112,8 +109,8 @@ impl DfsClientConn {
                                     write_action.content,
                                 );
                                 match write_result {
-                                    Ok(_) => {
-                                        let res = Response::Ok(());
+                                    Ok(write_len) => {
+                                        let res = Response::Ok(write_len as u64);
                                         bincode::encode_into_writer(
                                             &res,
                                             Tcpio(&mut self.conn),
@@ -127,10 +124,39 @@ impl DfsClientConn {
                                 }
                             }
                             Lookup(lookup) => {
-                                let relpath = req.relpath;
-                                let path = Path::new(relpath).join(lookup.path);
-                                let joined = path.to_string_lossy();
-                                let res = Response::Ok(joined);
+                                let res = match File::open(
+                                    self.root_path.join(req.relpath).join(lookup.path),
+                                ) {
+                                    Ok(_) => {
+                                        let path = Path::new(req.relpath).join(lookup.path);
+                                        Response::Ok(path.to_string_lossy().to_string())
+                                    }
+                                    Err(e) => Response::Err(io_err_to_axerr(e).code()),
+                                };
+                                bincode::encode_into_writer(
+                                    &res,
+                                    Tcpio(&mut self.conn),
+                                    BINCODE_CONFIG,
+                                )
+                                .unwrap();
+                            }
+                            Create(create) => {
+                                let _ = File::create(
+                                    self.root_path.join(req.relpath).join(create.path),
+                                )?;
+                                let res = Response::Ok(());
+                                bincode::encode_into_writer(
+                                    &res,
+                                    Tcpio(&mut self.conn),
+                                    BINCODE_CONFIG,
+                                )
+                                .unwrap();
+                            }
+                            Action::Trunc(trunc) => {
+                                let file_path = self.root_path.join(req.relpath);
+                                let f = OpenOptions::new().write(true).open(file_path).unwrap();
+                                f.set_len(trunc.size).unwrap();
+                                let res = Response::Ok(());
                                 bincode::encode_into_writer(
                                     &res,
                                     Tcpio(&mut self.conn),
@@ -216,7 +242,7 @@ impl DfsClientConn {
         Ok(ret)
     }
 
-    fn handle_open(&mut self, open_path: &str) -> Result<File> {
+    fn handle_open(&self, open_path: &str) -> Result<File> {
         let modified_str = open_path.trim_start_matches(|c| c == '/');
         let file_path = self.root_path.join(modified_str);
 
@@ -247,8 +273,8 @@ impl DfsClientConn {
         Ok((size, buffer))
     }
 
-    fn handle_write(&self, write_path: &str, offset: u64, content: &[u8]) -> Result<()> {
-        let modified_str = write_path.trim_start_matches(|c| c == '/');
+    fn handle_write(&self, write_path: &str, offset: u64, content: &[u8]) -> Result<usize> {
+        let modified_str = write_path.trim_start_matches('/');
         let file_path = self.root_path.join(modified_str);
 
         let mut file = OpenOptions::new()
@@ -256,12 +282,16 @@ impl DfsClientConn {
             .append(true)
             .open(file_path)?;
 
+        println!("Open file succeed!");
+
         // Seek to the specified offset
         file.seek(SeekFrom::Start(offset))?;
 
         // Write the provided content at the specified offset
         file.write_all(content)?;
 
-        Ok(())
+        println!("Write file succeed!");
+
+        Ok(content.len())
     }
 }
