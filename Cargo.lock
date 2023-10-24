@@ -928,6 +928,8 @@ dependencies = [
  "axerrno",
  "axfs",
  "bincode",
+ "env_logger",
+ "log",
 ]
 
 [[package]]

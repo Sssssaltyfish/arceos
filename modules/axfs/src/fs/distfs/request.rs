@@ -166,8 +166,8 @@ impl<'s, 'a> Request<'s, 'a> {
 }
 
 pub fn send_fsop(req: Request, conn: &TcpSocket) -> AxResult {
-    bincode::encode_into_writer(req, TcpIO(conn), BINCODE_CONFIG)
-        .map_err(|e| ax_err_type!(Io, e))?;
+    let buf = bincode::encode_to_vec(req, BINCODE_CONFIG).map_err(|e| ax_err_type!(Io, e))?;
+    conn.send(&buf)?;
     Ok(())
 }
 
@@ -198,7 +198,9 @@ mod test {
     fn test_borrow() -> Result<()> {
         let req = Request::new("./test", Remove { path: "some_path" }.into());
         let buf = bincode::encode_to_vec(&req, BINCODE_CONFIG).unwrap();
-        let reconstruct: Request = bincode::borrow_decode_from_slice(&buf, BINCODE_CONFIG).unwrap().0;
+        let reconstruct: Request = bincode::borrow_decode_from_slice(&buf, BINCODE_CONFIG)
+            .unwrap()
+            .0;
         assert_eq!(req, reconstruct);
         Ok(())
     }

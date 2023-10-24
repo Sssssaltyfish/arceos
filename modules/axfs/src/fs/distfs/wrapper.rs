@@ -1,5 +1,5 @@
 use alloc::sync::{Arc, Weak};
-use axerrno::{ax_err_type, AxError, AxResult};
+use axerrno::{ax_err, ax_err_type, AxError, AxResult};
 use axfs_vfs::{
     VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodePerm, VfsNodeRef, VfsNodeType, VfsResult,
 };
@@ -27,6 +27,7 @@ impl NodeWrapper {
     }
 
     fn try_get_data(&self) -> VfsResult<Arc<SharedData>> {
+        log::debug!("distfs: try_get_data");
         let ret = self.data.upgrade().ok_or_else(|| {
             ax_err_type!(
                 BadState,
@@ -37,6 +38,7 @@ impl NodeWrapper {
     }
 
     fn with_path(&self, relpath: CompactString) -> Self {
+        log::debug!("distfs: with_path");
         Self {
             data: self.data.clone(),
             relpath,
@@ -65,14 +67,17 @@ macro_rules! impl_vfs_op {
 
 impl VfsNodeOps for NodeWrapper {
     fn open(&self) -> VfsResult {
+        log::debug!("distfs: open");
         impl_vfs_op!(self, Response<()>, Open).map_code()
     }
 
     fn release(&self) -> VfsResult {
+        log::debug!("distfs: release");
         impl_vfs_op!(self, Response<()>, Release).map_code()
     }
 
     fn get_attr(&self) -> VfsResult<VfsNodeAttr> {
+        log::debug!("distfs: get_attr");
         let NodeAttr {
             mode,
             ty,
@@ -88,6 +93,7 @@ impl VfsNodeOps for NodeWrapper {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> VfsResult<usize> {
+        log::debug!("distfs: read_at");
         let length = buf.len() as _;
         let data = self.try_get_data()?;
         let conn = &data.conn;
@@ -95,30 +101,47 @@ impl VfsNodeOps for NodeWrapper {
             Request::new(&self.relpath, request::Read { length, offset }.into()),
             &conn,
         )?;
-        let stat: Response<()> = recv_fsop(&conn)?;
+        let stat: Response<u64> = recv_fsop(&conn)?;
 
         // If error code is returned, early exit;
         // otherwise recv content of file.
-        stat.map_code()?;
+        let size = stat.map_code()? as usize;
+        if size == 0 {
+            return Ok(0);
+        }
         let ret = conn.recv(buf)?;
-        Ok(ret)
+        match size.cmp(&ret) {
+            core::cmp::Ordering::Less => panic!(
+                "recved {} bytes while expecting {} bytes, which implies severe logical bug",
+                ret, size
+            ),
+            core::cmp::Ordering::Equal => Ok(size),
+            core::cmp::Ordering::Greater => ax_err!(
+                UnexpectedEof,
+                format_args!("recved {} bytes while expecting {} bytes", ret, size)
+            ),
+        }
     }
 
     fn write_at(&self, offset: u64, buf: &[u8]) -> VfsResult<usize> {
+        log::debug!("distfs: write_at");
         let content = buf;
         let ret = impl_vfs_op!(self, Response<u64>, Write, offset, content).map_code()?;
         Ok(ret as _)
     }
 
     fn fsync(&self) -> VfsResult {
+        log::debug!("distfs: fsync");
         impl_vfs_op!(self, Response<()>, Fsync).map_code()
     }
 
     fn truncate(&self, size: u64) -> VfsResult {
+        log::debug!("distfs: truncate");
         impl_vfs_op!(self, Response<()>, Trunc, size).map_code()
     }
 
     fn parent(&self) -> Option<VfsNodeRef> {
+        log::debug!("distfs: parent");
         if self.relpath == "./" {
             let data = self.try_get_data().ok()?;
             let ret = data.parent.wait();
@@ -139,12 +162,15 @@ impl VfsNodeOps for NodeWrapper {
     }
 
     fn lookup(self: Arc<Self>, path: &str) -> VfsResult<VfsNodeRef> {
+        log::debug!("distfs: lookup");
+        let path = path.trim_start_matches('/');
         let data = self.try_get_data()?;
         let conn = &data.conn;
         send_fsop(
             Request::new(&self.relpath, request::Lookup { path }.into()),
             &conn,
         )?;
+        log::debug!("distfs: lookup after send");
         let relpath: Response<_> = recv_fsop_serde(&conn)?;
         let relpath = relpath.map_code()?;
 
@@ -152,15 +178,20 @@ impl VfsNodeOps for NodeWrapper {
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {
+        log::debug!("distfs: create");
         let ty = ty as _;
+        let path = path.trim_start_matches('/');
         impl_vfs_op!(self, Response<()>, Create, path, ty).map_code()
     }
 
     fn remove(&self, path: &str) -> VfsResult {
+        log::debug!("distfs: remove");
+        let path = path.trim_start_matches('/');
         impl_vfs_op!(self, Response<()>, Remove, path).map_code()
     }
 
     fn read_dir(&self, start_idx: usize, dirents: &mut [VfsDirEntry]) -> VfsResult<usize> {
+        log::debug!("distfs: read_dir");
         let size = dirents.len() as _;
         let start_idx = start_idx as _;
         let data = self.try_get_data()?;
@@ -182,10 +213,12 @@ impl VfsNodeOps for NodeWrapper {
     }
 
     fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
+        log::debug!("distfs: rename");
         impl_vfs_op!(self, Response<()>, Rename, src_path, dst_path).map_code()
     }
 
     fn as_any(&self) -> &dyn core::any::Any {
+        log::debug!("distfs: as_any");
         self
     }
 }
