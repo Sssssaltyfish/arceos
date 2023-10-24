@@ -19,7 +19,7 @@ pub struct NodeWrapper {
 }
 
 impl NodeWrapper {
-    pub fn new(data: Weak<SharedData>, relpath: impl ToCompactString) -> Self {
+    pub(super) fn new(data: Weak<SharedData>, relpath: impl ToCompactString) -> Self {
         Self {
             data,
             relpath: relpath.to_compact_string(),
