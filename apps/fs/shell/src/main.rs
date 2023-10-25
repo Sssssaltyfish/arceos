@@ -30,7 +30,7 @@ use std::{
 
 use noline::builder::EditorBuilder;
 
-const MAX_CMD_LEN: usize = 256;
+const MAX_HISTORY: usize = 20;
 
 struct Stdio<'a>(&'a mut Stdin, &'a mut Stdout);
 
@@ -96,8 +96,8 @@ fn main() {
 
     let mut io = Stdio(&mut stdin, &mut stdout);
 
-    let mut editor = EditorBuilder::new_static::<MAX_CMD_LEN>()
-        .with_static_history::<25>()
+    let mut editor = EditorBuilder::new_unbounded()
+        .with_unbounded_history()
         .build_sync(&mut io)
         .unwrap();
 
@@ -121,7 +121,7 @@ fn main() {
     }
 
     let mut history = BufWriter::new(prompt_history().unwrap());
-    for slice in editor.get_history() {
+    for slice in editor.get_history().take(MAX_HISTORY) {
         for (_, &c) in slice {
             history.write_all(&[c]).unwrap();
         }
