@@ -47,13 +47,12 @@ impl DfsHost {
                     self.clients.push(Arc::clone(&new_client));
                     let thread_client = Arc::clone(&new_client);
                     // Distribute to handle thread
-                    let handle_thread = thread::spawn({
+                    thread::spawn({
                         move || { 
                             let mut thread_client = thread_client.lock().unwrap();
                             thread_client.handle_conn();
                         }
                     });
-                    handle_thread.join().expect(&format!("Thread for handling client failed."));
                 }
                 Err(e) => {
                     eprintln!("Error accepting connection: {}", e);
