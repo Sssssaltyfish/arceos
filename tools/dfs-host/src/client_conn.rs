@@ -1,9 +1,9 @@
 use axerrno::{ax_err_type, AxError, AxResult};
-use axfs::distfs::request::Action;
+use axfs::distfs::request::{Action, DirEntry};
 use axfs::distfs::request::{NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
 use bincode::Encode;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 use std::net::TcpStream;
 use std::os::unix::fs::PermissionsExt;
@@ -57,14 +57,16 @@ impl DfsClientConn {
                 Action::GetAttr => self.handle_getattr(req.relpath),
                 Action::Read(read) => self.handle_read(req.relpath, read.offset, read.length),
                 Action::Write(write) => self.handle_write(req.relpath, write.offset, write.content),
-                Action::Fsync => self.handle_(),
+                Action::Fsync => self.handle_fsync(),
                 Action::Trunc(trunc) => self.handle_trunc(req.relpath, trunc.size),
-                Action::GetParent => self.handle_(),
+                Action::GetParent => self.handle_getparent(req.relpath),
                 Action::Lookup(lookup) => self.handle_lookup(req.relpath, lookup.path),
                 Action::Create(create) => self.handle_create(req.relpath, create.path),
-                Action::Remove(_) => self.handle_(),
-                Action::ReadDir(_) => self.handle_(),
-                Action::Rename(_) => self.handle_(),
+                Action::Remove(remove) => self.handle_remove(req.relpath, remove.path),
+                Action::ReadDir(readdir) => self.handle_readdir(req.relpath, readdir.start_idx),
+                Action::Rename(rename) => {
+                    self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
+                }
             }
         }
 
@@ -202,6 +204,68 @@ impl DfsClientConn {
         }
     }
 
+    fn handle_rename(&mut self, rel_path: &str, src_path: &str, dst_path: &str) {
+        let src = self
+            .root_path
+            .join(rel_path.trim_start_matches('/'))
+            .join(src_path.trim_start_matches('/'));
+        let dst = self
+            .root_path
+            .join(rel_path.trim_start_matches('/'))
+            .join(dst_path.trim_start_matches('/'));
+        match fs::rename(src, dst) {
+            Ok(_) => send_ok_to_conn(&mut self.conn, ()),
+            Err(e) => send_err_to_conn(&mut self.conn, io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_remove(&mut self, rel_path: &str, remove_path: &str) {
+        let path = self
+            .root_path
+            .join(rel_path.trim_start_matches('/'))
+            .join(remove_path.trim_start_matches('/'));
+        match fs::remove_file(path) {
+            Ok(_) => send_ok_to_conn(&mut self.conn, ()),
+            Err(e) => send_err_to_conn(&mut self.conn, io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_readdir(&mut self, rel_path: &str, start_index: u64) {
+        let base_path = self.root_path.join(rel_path.trim_start_matches('/'));
+        let entities = fs::read_dir(base_path).unwrap().skip(start_index as _);
+        let entities_col: Vec<_> = entities.collect();
+        send_ok_to_conn(&mut self.conn, entities_col.len());
+        for entry in entities_col {
+            match entry {
+                Ok(e) => {
+                    if e.path().is_dir() || e.path().is_file() {
+                        bincode::serde::encode_into_writer(
+                            &DirEntry {
+                                ty: unix_ty_to_axty(e.file_type().unwrap()),
+                                name: e.file_name().to_string_lossy().into(),
+                            },
+                            Tcpio(&mut self.conn),
+                            BINCODE_CONFIG,
+                        )
+                        .expect("Error when writing back serialized entry data;");
+                    } else {
+                        unreachable!()
+                    }
+                }
+                Err(e) => todo!(),
+            }
+        }
+    }
+
+    fn handle_getparent(&mut self, rel_path: &str) {
+        let parent_path = Path::new(rel_path).parent();
+        send_ok_to_conn(&mut self.conn, parent_path);
+    }
+
+    fn handle_fsync(&mut self) {
+        send_ok_to_conn(&mut self.conn, ());
+    }
+
     fn handle_(&self) {}
 }
 
@@ -210,7 +274,7 @@ fn read_data_from_conn(buff: &mut [u8], conn: &mut TcpStream) -> usize {
         .read(buff)
         .map_err(|e| {
             eprintln!("Error reading bytes from connection: {:?}", conn);
-            // send_err_to_conn(&mut self.conn, io_err_to_axerr(e))
+            send_err_to_conn(conn, io_err_to_axerr(e))
         })
         .unwrap();
     bytes_read
