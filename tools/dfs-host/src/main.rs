@@ -1,14 +1,20 @@
-extern crate alloc;
+#![cfg_attr(feature = "axstd", no_std)]
 
-use host::DfsHost;
-use std::env;
+#[cfg(feature = "axstd")]
+extern crate axstd as std;
+
+extern crate alloc;
 
 mod client_conn;
 mod host;
 mod node_conn;
 mod utils;
 
+#[cfg(not(feature = "axstd"))]
 fn main() {
+    use host::DfsHost;
+    use std::env;
+
     env_logger::builder()
         .filter_level(logger::LevelFilter::Debug)
         .init();
@@ -16,4 +22,10 @@ fn main() {
     let node_id: u32 = args[1].parse().unwrap();
     let mut host = DfsHost::new(node_id, env::current_dir().unwrap());
     let _ = host.start_listening();
+}
+
+#[cfg(feature = "axstd")]
+#[no_mangle]
+fn main() {
+    unimplemented!("dfs-host is not ready to be a arceos app")
 }
