@@ -68,6 +68,10 @@ pub fn ax_create_dir(path: &str) -> AxResult {
     axfs::api::create_dir(path)
 }
 
+pub fn ax_create_dir_all(path: &str) -> AxResult {
+    axfs::api::create_dir_all(path)
+}
+
 pub fn ax_remove_dir(path: &str) -> AxResult {
     axfs::api::remove_dir(path)
 }
