@@ -10,8 +10,6 @@ mod utils_impl {
 
     use axerrno::AxError;
 
-    use super::*;
-
     use std::os::unix::prelude::FileTypeExt;
 
     pub use std::path::{Path, PathBuf};
