@@ -5,28 +5,35 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+defaults = ["std"]
+std = ["dep:env_logger"]
+axstd = ["dep:axstd"]
+
 [dependencies.bincode]
 version = "2.0.0-rc.3"
 default-features = false
 features = ["alloc", "derive", "serde"]
 
 [dependencies.dashmap]
-version = "5.5.3"
+version = "3.8.0"
 default-features = false
-features = ["serde"]
+features = ["no_std", "axstd", "serde"]
 
 [dependencies.crossbeam]
 version = "0.8.2"
 default-features = false
 features = ["alloc"]
 
-[dependencies.serde]
-version = "1.0.188"
-default-features = false
-features = ["alloc", "derive"]
-
 [dependencies]
 axfs = { path = "../../modules/axfs", features = ["distfs"] }
 axerrno = { path = "../../crates/axerrno" }
-env_logger = "0.10.0"
-logger = { version = "*", package = "log" }
+env_logger = { version = "0.10.0", optional = true }
+logger = { version = "*", package = "log", default-features = false }
+
+axstd = { path = "../../ulib/axstd", optional = true, features = [
+    "alloc",
+    "fs",
+    "net",
+    "multitask",
+] }

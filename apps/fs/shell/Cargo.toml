@@ -26,3 +26,6 @@ axstd = { path = "../../../ulib/axstd", features = [
     "fs",
     "distfs",
 ], optional = true }
+dfs-host = { path = "../../../tools/dfs-host", default-features = false, features = [
+    "axstd",
+] }

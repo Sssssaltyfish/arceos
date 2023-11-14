@@ -12,6 +12,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a824f2aa7e75a0c98c5a504fceb80649e9c35265d44525b5f94de4771a395cd"
+dependencies = [
+ "getrandom",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
+name = "ahash"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd7d5a2cecb58716e47d67d5703a249964b14c7be1ec3cad3affc295b2d1c35d"
+dependencies = [
+ "cfg-if 1.0.0",
+ "once_cell",
+ "version_check",
+ "zerocopy 0.7.3",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -32,6 +55,12 @@ dependencies = [
  "rlsf",
  "slab_allocator",
 ]
+
+[[package]]
+name = "allocator-api2"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
 name = "android-tzdata"
@@ -148,6 +177,7 @@ dependencies = [
  "axfs_vfs",
  "axstd",
  "crate_interface",
+ "dfs-host",
  "noline",
 ]
 
@@ -255,7 +285,7 @@ version = "0.1.0"
 dependencies = [
  "allocator",
  "axerrno",
- "cfg-if",
+ "cfg-if 1.0.0",
  "log",
  "memory_addr",
  "spinlock",
@@ -287,7 +317,7 @@ dependencies = [
  "axalloc",
  "axconfig",
  "axhal",
- "cfg-if",
+ "cfg-if 1.0.0",
  "driver_block",
  "driver_common",
  "driver_display",
@@ -337,7 +367,7 @@ dependencies = [
  "bincode",
  "bitflags 2.4.0",
  "capability",
- "cfg-if",
+ "cfg-if 1.0.0",
  "compact_str",
  "crate_interface",
  "driver_block",
@@ -387,7 +417,7 @@ dependencies = [
  "axconfig",
  "axlog",
  "bitflags 2.4.0",
- "cfg-if",
+ "cfg-if 1.0.0",
  "crate_interface",
  "dw_apb_uart",
  "handler_table",
@@ -433,7 +463,7 @@ name = "axlog"
 version = "0.1.0"
 dependencies = [
  "axlog",
- "cfg-if",
+ "cfg-if 1.0.0",
  "chrono",
  "crate_interface",
  "log",
@@ -450,7 +480,7 @@ dependencies = [
  "axio",
  "axsync",
  "axtask",
- "cfg-if",
+ "cfg-if 1.0.0",
  "driver_net",
  "lazy_init",
  "log",
@@ -505,7 +535,7 @@ dependencies = [
  "axconfig",
  "axhal",
  "axtask",
- "cfg-if",
+ "cfg-if 1.0.0",
  "crate_interface",
  "kernel_guard",
  "lazy_init",
@@ -682,6 +712,12 @@ dependencies = [
 
 [[package]]
 name = "cfg-if"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
+
+[[package]]
+name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
@@ -769,7 +805,7 @@ name = "compact_str"
 version = "0.8.0-beta"
 dependencies = [
  "castaway",
- "cfg-if",
+ "cfg-if 1.0.0",
  "itoa",
  "rustversion",
  "ryu",
@@ -852,7 +888,7 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2801af0d36612ae591caa9568261fddce32ce6e08a7275ea334a06a4ad021a2c"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "crossbeam-epoch",
  "crossbeam-queue",
  "crossbeam-utils",
@@ -864,7 +900,7 @@ version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a33c2bf77f2df06183c3aa30d1e96c0695a313d4f9c453cc3762a6db39f99200"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "crossbeam-utils",
 ]
 
@@ -874,7 +910,7 @@ version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6fd6f855243022dcecf8702fef0c297d4338e226845fe067f6341ad9fa0cef"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "crossbeam-epoch",
  "crossbeam-utils",
 ]
@@ -886,7 +922,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae211234986c545741a7dc064309f67ee1e5ad243d0e48335adc0484d960bcc7"
 dependencies = [
  "autocfg",
- "cfg-if",
+ "cfg-if 1.0.0",
  "crossbeam-utils",
  "memoffset",
  "scopeguard",
@@ -898,7 +934,7 @@ version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1cfb3ea8a53f37c40dea2c7bedcbd88bdfae54f5e2175d6ecaff1c988353add"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "crossbeam-utils",
 ]
 
@@ -908,20 +944,17 @@ version = "0.8.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a22b2d63d4d1dc0b7f1b6b2747dd0088008a9be28b6ddf0b1e7d335e3037294"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
 name = "dashmap"
-version = "5.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+version = "3.11.10"
 dependencies = [
- "cfg-if",
+ "ahash 0.7.7",
+ "cfg-if 0.1.10",
  "hashbrown",
- "lock_api",
- "once_cell",
- "parking_lot_core",
+ "num_cpus",
  "serde",
 ]
 
@@ -963,12 +996,12 @@ version = "0.1.0"
 dependencies = [
  "axerrno",
  "axfs",
+ "axstd",
  "bincode",
  "crossbeam",
  "dashmap",
  "env_logger",
  "log",
- "serde",
 ]
 
 [[package]]
@@ -1136,7 +1169,7 @@ version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
 ]
@@ -1171,6 +1204,10 @@ name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+dependencies = [
+ "ahash 0.8.5",
+ "allocator-api2",
+]
 
 [[package]]
 name = "heapless"
@@ -1281,7 +1318,7 @@ dependencies = [
 name = "kernel_guard"
 version = "0.1.0"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "crate_interface",
 ]
 
@@ -1316,7 +1353,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "winapi",
 ]
 
@@ -1427,9 +1464,8 @@ dependencies = [
 [[package]]
 name = "num_cpus"
 version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
+ "axconfig",
  "hermit-abi",
  "libc",
 ]
@@ -1506,19 +1542,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parking_lot_core"
-version = "0.9.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c42a9226546d68acdd9c0a280d17ce19bfe27a46bf68784e4066115788d008e"
-dependencies = [
- "cfg-if",
- "libc",
- "redox_syscall",
- "smallvec",
- "windows-targets",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1534,7 +1557,7 @@ checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 name = "percpu"
 version = "0.1.0"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "kernel_guard",
  "percpu_macros",
  "spin 0.9.8",
@@ -1711,15 +1734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redox_syscall"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4722d768eff46b75989dd134e5c353f0d6296e5aaa3132e776cbdb56be7731aa"
-dependencies = [
- "bitflags 1.3.2",
-]
-
-[[package]]
 name = "regex"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1765,7 +1779,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "222fb240c3286247ecdee6fa5341e7cdad0ffdf8e7e401d9937f2d58482a20bf"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "const-default",
  "libc",
  "svgbobdoc",
@@ -1910,19 +1924,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "smallvec"
-version = "1.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
-
-[[package]]
 name = "smoltcp"
 version = "0.10.0"
 source = "git+https://github.com/rcore-os/smoltcp.git?rev=2ade274#2ade2747abc4d779d0836154b0413d13ce16cd5b"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
- "cfg-if",
+ "cfg-if 1.0.0",
  "defmt",
  "heapless",
  "log",
@@ -1948,7 +1956,7 @@ dependencies = [
 name = "spinlock"
 version = "0.1.0"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "kernel_guard",
 ]
 
@@ -2130,7 +2138,7 @@ source = "git+https://github.com/rcore-os/virtio-drivers.git?rev=409ee72#409ee72
 dependencies = [
  "bitflags 1.3.2",
  "log",
- "zerocopy",
+ "zerocopy 0.6.3",
 ]
 
 [[package]]
@@ -2191,7 +2199,7 @@ version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7706a72ab36d8cb1f80ffbf0e071533974a60d0a308d01a5d0375bf60499a342"
 dependencies = [
- "cfg-if",
+ "cfg-if 1.0.0",
  "wasm-bindgen-macro",
 ]
 
@@ -2418,7 +2426,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3b9c234616391070b0b173963ebc65a9195068e7ed3731c6edac2ec45ebe106"
 dependencies = [
  "byteorder",
- "zerocopy-derive",
+ "zerocopy-derive 0.6.3",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a7af71d8643341260a65f89fa60c0eeaa907f34544d8f6d9b0df72f069b5e74"
+dependencies = [
+ "zerocopy-derive 0.7.3",
 ]
 
 [[package]]
@@ -2426,6 +2443,17 @@ name = "zerocopy-derive"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f7f3a471f98d0a61c34322fbbfd10c384b07687f680d4119813713f72308d91"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9731702e2f0617ad526794ae28fbc6f6ca8849b5ba729666c2a5bc4b6ddee2cd"
 dependencies = [
  "proc-macro2",
  "quote",

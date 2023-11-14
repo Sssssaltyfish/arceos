@@ -4,3 +4,10 @@
 [submodule "patches/noline"]
 	path = patches/noline
 	url = https://github.com/Sssssaltyfish/noline.git
+[submodule "patches/num_cpus"]
+	path = patches/num_cpus
+	url = https://github.com/Sssssaltyfish/num_cpus.git
+[submodule "patches/dashmap"]
+	path = patches/dashmap
+	url = https://github.com/Sssssaltyfish/dashmap.git
+	branch = arceos
