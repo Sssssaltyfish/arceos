@@ -7,6 +7,8 @@ mod utils;
 
 fn main() {
     env_logger::builder().filter_level(logger::LevelFilter::Debug).init();
-    let mut host = DfsHost::new(env::current_dir().unwrap());
-    let _ = host.start_listening("127.0.0.1:8000");
+    let args: Vec<String> = env::args().collect();
+    let node_id: u32 = args[1].parse().unwrap();
+    let mut host = DfsHost::new(node_id, env::current_dir().unwrap());
+    let _ = host.start_listening();
 }

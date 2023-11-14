@@ -16,7 +16,6 @@ use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
 
 pub struct DfsClientConn {
     root_path: PathBuf,
-    conn_id: u32,
     conn: TcpStream,
 }
 
@@ -31,10 +30,9 @@ impl Writer for Tcpio<'_> {
 }
 
 impl DfsClientConn {
-    pub fn new(root_path: PathBuf, conn_id: u32, conn: TcpStream) -> Self {
+    pub fn new(root_path: PathBuf, conn: TcpStream) -> Self {
         DfsClientConn {
             root_path,
-            conn_id,
             conn,
         }
     }
@@ -52,6 +50,7 @@ impl DfsClientConn {
             let req = deserialize_data_from_buff(&buff, bytes_read);
             println!("Received: {:?}", req);
             match req.action {
+                
                 Action::Open => self.handle_open(req.relpath),
                 Action::Release => self.handle_release(),
                 Action::GetAttr => self.handle_getattr(req.relpath),
