@@ -10,6 +10,21 @@ version = "2.0.0-rc.3"
 default-features = false
 features = ["alloc", "derive", "serde"]
 
+[dependencies.dashmap]
+version = "5.5.3"
+default-features = false
+features = ["serde"]
+
+[dependencies.crossbeam]
+version = "0.8.2"
+default-features = false
+features = ["alloc"]
+
+[dependencies.serde]
+version = "1.0.188"
+default-features = false
+features = ["alloc", "derive"]
+
 [dependencies]
 axfs = { path = "../../modules/axfs", features = ["distfs"] }
 axerrno = { path = "../../crates/axerrno" }

@@ -3,6 +3,7 @@ use axfs::distfs::request::{Action, DirEntry};
 use axfs::distfs::request::{NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
 use bincode::Encode;
+use dashmap::DashMap;
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -21,8 +22,8 @@ use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
 pub struct DfsClientConn {
     root_path: PathBuf,
     conn: TcpStream,
-    peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsNodeConn>>>>>,
-    file_index: Arc<Mutex<BTreeMap<String, NodeID>>>,
+    peers: Arc<DashMap<NodeID, Arc<Mutex<DfsNodeConn>>>>,
+    file_index: Arc<DashMap<String, NodeID>>,
 }
 
 pub(super) struct Tcpio<'a>(pub &'a mut TcpStream);
@@ -39,8 +40,8 @@ impl DfsClientConn {
     pub fn new(
         root_path: PathBuf,
         conn: TcpStream,
-        peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsNodeConn>>>>>,
-        file_index: Arc<Mutex<BTreeMap<String, NodeID>>>,
+        peers: Arc<DashMap<NodeID, Arc<Mutex<DfsNodeConn>>>>,
+        file_index: Arc<DashMap<String, NodeID>>,
     ) -> Self {
         DfsClientConn {
             root_path,
@@ -61,7 +62,7 @@ impl DfsClientConn {
                 return;
             }
             let req = deserialize_data_from_buff(&buff, bytes_read);
-            println!("Received: {:?}", req);
+            logger::debug!("Received: {:?}", req);
             match req.action {
                 Action::Open => self.handle_open(req.relpath),
                 Action::Release => self.handle_release(),
@@ -286,7 +287,7 @@ fn read_data_from_conn(buff: &mut [u8], conn: &mut TcpStream) -> usize {
     let bytes_read = conn
         .read(buff)
         .map_err(|e| {
-            eprintln!("Error reading bytes from connection: {:?}", conn);
+            logger::error!("Error reading bytes from connection: {:?}", conn);
             send_err_to_conn(conn, io_err_to_axerr(e))
         })
         .unwrap();
@@ -301,7 +302,7 @@ fn deserialize_data_from_buff<'a>(
     let (req, _) =
         bincode::borrow_decode_from_slice::<Request, _>(&buff[..bytes_read], BINCODE_CONFIG)
             .map_err(|e| {
-                eprintln!("Error deserializing from connection: {}", e);
+                logger::error!("Error deserializing from connection: {}", e);
                 // send_err_to_conn(conn, io_err_to_axerr(ErrorKind::InvalidData.into()))
             })
             .unwrap();

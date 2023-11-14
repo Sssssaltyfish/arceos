@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use dashmap::DashMap;
+
 use crate::client_conn::DfsClientConn;
 use crate::node_conn::DfsNodeConn;
 pub type NodeID = u32;
@@ -15,8 +17,8 @@ pub struct DfsHost {
     node_id: NodeID,
     root_path: PathBuf,
     clients: Arc<Mutex<Vec<Arc<Mutex<DfsClientConn>>>>>,
-    peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsNodeConn>>>>>,
-    file_index: Arc<Mutex<BTreeMap<String, NodeID>>>,
+    peers: Arc<DashMap<NodeID, Arc<Mutex<DfsNodeConn>>>>,
+    file_index: Arc<DashMap<String, NodeID>>,
 }
 
 impl DfsHost {
@@ -25,8 +27,8 @@ impl DfsHost {
             node_id,
             root_path,
             clients: Arc::new(Mutex::new(Vec::new())),
-            peers: Arc::new(Mutex::new(BTreeMap::new())),
-            file_index: Arc::new(Mutex::new(BTreeMap::new())),
+            peers: Arc::new(DashMap::new()),
+            file_index: Arc::new(DashMap::new()),
         }
     }
 
@@ -38,7 +40,7 @@ impl DfsHost {
             let conn = TcpStream::connect(&format!("{}:{}", START_ADDRESS, NODE_START_PORT + node))
                 .expect(&format!("Failed to connect to node {}", node));
             let peer_conn = Arc::new(Mutex::new(DfsNodeConn::new(conn)));
-            self.peers.lock().unwrap().insert(node, peer_conn.clone());
+            self.peers.insert(node, peer_conn.clone());
             // Distribute to handle thread
             thread::spawn({
                 move || {
@@ -86,7 +88,7 @@ impl DfsHost {
                         let new_peer = Arc::new(Mutex::new(DfsNodeConn::new(
                             peer_stream,
                         )));
-                        let mut p = peers_ref.lock().unwrap();
+                        let p = &peers_ref;
                         let node_id = p.len();
                         p.insert(node_id as NodeID, new_peer.clone());
                         // Distribute to handle thread
