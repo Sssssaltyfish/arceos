@@ -1,22 +1,28 @@
-use axerrno::{ax_err_type, AxError, AxResult};
+use axerrno::AxError;
 use axfs::distfs::request::{Action, DirEntry};
 use axfs::distfs::request::{NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
 use bincode::Encode;
+use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::TcpStream;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::prelude::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use bincode::enc::write::Writer;
 
+use crate::host::NodeID;
+use crate::node_conn::DfsNodeConn;
 use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
 
 pub struct DfsClientConn {
     root_path: PathBuf,
     conn: TcpStream,
+    peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsNodeConn>>>>>,
+    file_index: Arc<Mutex<BTreeMap<String, NodeID>>>,
 }
 
 pub(super) struct Tcpio<'a>(pub &'a mut TcpStream);
@@ -30,10 +36,17 @@ impl Writer for Tcpio<'_> {
 }
 
 impl DfsClientConn {
-    pub fn new(root_path: PathBuf, conn: TcpStream) -> Self {
+    pub fn new(
+        root_path: PathBuf,
+        conn: TcpStream,
+        peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsNodeConn>>>>>,
+        file_index: Arc<Mutex<BTreeMap<String, NodeID>>>,
+    ) -> Self {
         DfsClientConn {
             root_path,
             conn,
+            peers,
+            file_index,
         }
     }
 
@@ -50,7 +63,6 @@ impl DfsClientConn {
             let req = deserialize_data_from_buff(&buff, bytes_read);
             println!("Received: {:?}", req);
             match req.action {
-                
                 Action::Open => self.handle_open(req.relpath),
                 Action::Release => self.handle_release(),
                 Action::GetAttr => self.handle_getattr(req.relpath),
@@ -257,14 +269,17 @@ impl DfsClientConn {
     }
 
     fn handle_getparent(&mut self, rel_path: &str) {
-        let parent_path = Path::new(rel_path).parent().unwrap().to_string_lossy().to_string();
+        let parent_path = Path::new(rel_path)
+            .parent()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         send_ok_to_conn(&mut self.conn, parent_path);
     }
 
     fn handle_fsync(&mut self) {
         send_ok_to_conn(&mut self.conn, ());
     }
-
 }
 
 fn read_data_from_conn(buff: &mut [u8], conn: &mut TcpStream) -> usize {

@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::client_conn::DfsClientConn;
-type NodeID = u32;
+use crate::node_conn::DfsNodeConn;
+pub type NodeID = u32;
 const NODE_START_PORT: NodeID = 8000;
 const CLIENT_START_PORT: NodeID = 9000;
 const START_ADDRESS: &str = "127.0.0.1";
@@ -14,7 +15,7 @@ pub struct DfsHost {
     node_id: NodeID,
     root_path: PathBuf,
     clients: Arc<Mutex<Vec<Arc<Mutex<DfsClientConn>>>>>,
-    peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsClientConn>>>>>,
+    peers: Arc<Mutex<BTreeMap<NodeID, Arc<Mutex<DfsNodeConn>>>>>,
     file_index: Arc<Mutex<BTreeMap<String, NodeID>>>,
 }
 
@@ -36,7 +37,7 @@ impl DfsHost {
         for node in 0..self.node_id {
             let conn = TcpStream::connect(&format!("{}:{}", START_ADDRESS, NODE_START_PORT + node))
                 .expect(&format!("Failed to connect to node {}", node));
-            let peer_conn = Arc::new(Mutex::new(DfsClientConn::new(self.root_path.clone(), conn)));
+            let peer_conn = Arc::new(Mutex::new(DfsNodeConn::new(conn)));
             self.peers.lock().unwrap().insert(node, peer_conn.clone());
             // Distribute to handle thread
             thread::spawn({
@@ -73,7 +74,6 @@ impl DfsHost {
             self.node_id + CLIENT_START_PORT
         );
 
-        let peer_root_ref = self.root_path.clone();
         let peers_ref = self.peers.clone();
         let peer_thread = thread::spawn(move || {
             for stream in peer_listener.incoming() {
@@ -83,8 +83,7 @@ impl DfsHost {
                             "Accepted a new peer connection from: {:?}",
                             peer_stream.peer_addr()
                         );
-                        let new_peer = Arc::new(Mutex::new(DfsClientConn::new(
-                            peer_root_ref.clone(),
+                        let new_peer = Arc::new(Mutex::new(DfsNodeConn::new(
                             peer_stream,
                         )));
                         let mut p = peers_ref.lock().unwrap();
@@ -107,6 +106,8 @@ impl DfsHost {
 
         let client_root_ref = self.root_path.clone();
         let clients_ref = self.clients.clone();
+        let peers_ref = self.peers.clone();
+        let file_index_ref = self.file_index.clone();
         let client_thread = thread::spawn(move || {
             for stream in clients_listener.incoming() {
                 match stream {
@@ -120,6 +121,8 @@ impl DfsHost {
                             // Initialize fields for DfsClientConn as needed
                             client_root_ref.clone(),
                             client_stream,
+                            peers_ref.clone(),
+                            file_index_ref.clone(),
                         )));
                         let mut c = clients_ref.lock().unwrap();
                         c.push(new_client.clone());
