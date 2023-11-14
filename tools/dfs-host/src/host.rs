@@ -1,14 +1,20 @@
-use std::collections::BTreeMap;
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use alloc::{format, string::String, vec::Vec};
+
 use dashmap::DashMap;
 
+use crate::utils::PathBuf;
 use crate::client_conn::DfsClientConn;
 use crate::node_conn::DfsNodeConn;
+
+#[cfg(feature = "axstd")]
+use crate::utils::*;
+
 pub type NodeID = u32;
+
 const NODE_START_PORT: NodeID = 8000;
 const CLIENT_START_PORT: NodeID = 9000;
 const START_ADDRESS: &str = "127.0.0.1";
@@ -61,7 +67,7 @@ impl DfsHost {
             NODE_START_PORT + self.node_id
         ))
         .unwrap();
-        println!(
+        logger::info!(
             "Listening for incoming peer connections on {}...",
             self.node_id + NODE_START_PORT
         );
@@ -71,7 +77,7 @@ impl DfsHost {
             CLIENT_START_PORT + self.node_id
         ))
         .unwrap();
-        println!(
+        logger::info!(
             "Listening for incoming client connections on {}...",
             self.node_id + CLIENT_START_PORT
         );
@@ -81,13 +87,11 @@ impl DfsHost {
             for stream in peer_listener.incoming() {
                 match stream {
                     Ok(peer_stream) => {
-                        println!(
+                        logger::info!(
                             "Accepted a new peer connection from: {:?}",
                             peer_stream.peer_addr()
                         );
-                        let new_peer = Arc::new(Mutex::new(DfsNodeConn::new(
-                            peer_stream,
-                        )));
+                        let new_peer = Arc::new(Mutex::new(DfsNodeConn::new(peer_stream)));
                         let p = &peers_ref;
                         let node_id = p.len();
                         p.insert(node_id as NodeID, new_peer.clone());
@@ -100,7 +104,7 @@ impl DfsHost {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Error accepting connection: {}", e);
+                        logger::error!("Error accepting connection: {}", e);
                     }
                 }
             }
@@ -114,7 +118,7 @@ impl DfsHost {
             for stream in clients_listener.incoming() {
                 match stream {
                     Ok(client_stream) => {
-                        println!(
+                        logger::info!(
                             "Accepted a new client connection from: {:?}",
                             client_stream.peer_addr()
                         );
@@ -137,7 +141,7 @@ impl DfsHost {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Error accepting connection: {}", e);
+                        logger::error!("Error accepting connection: {}", e);
                     }
                 }
             }

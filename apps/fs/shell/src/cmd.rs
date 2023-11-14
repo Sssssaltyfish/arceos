@@ -278,6 +278,8 @@ fn do_exit(_args: &str) {
 fn do_mount(args: &str) {
     use std::os::arceos::api::fs::{ax_mount, AxMountFlag};
 
+    use dfs_host::host::DfsHost;
+
     let mut args = args.split_ascii_whitespace();
     macro_rules! expect_arg {
         ( $name:ident ) => {

@@ -1,23 +1,34 @@
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::net::TcpStream;
+use std::sync::{Arc, Mutex};
+
+#[cfg(not(feature = "axstd"))]
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
 use axerrno::AxError;
 use axfs::distfs::request::{Action, DirEntry};
 use axfs::distfs::request::{NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
-use bincode::Encode;
-use dashmap::DashMap;
-use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::net::TcpStream;
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::prelude::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
 use bincode::enc::write::Writer;
+use bincode::Encode;
+use dashmap::DashMap;
+
+#[cfg(feature = "axstd")]
+use crate::utils::*;
 
 use crate::host::NodeID;
 use crate::node_conn::DfsNodeConn;
 use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
+use crate::utils::{Path, PathBuf};
 
 pub struct DfsClientConn {
     root_path: PathBuf,
@@ -29,7 +40,7 @@ pub struct DfsClientConn {
 pub(super) struct Tcpio<'a>(pub &'a mut TcpStream);
 
 impl Writer for Tcpio<'_> {
-    fn write(&mut self, bytes: &[u8]) -> std::result::Result<(), bincode::error::EncodeError> {
+    fn write(&mut self, bytes: &[u8]) -> core::result::Result<(), bincode::error::EncodeError> {
         self.0
             .write_all(bytes)
             .map_err(|e| bincode::error::EncodeError::OtherString(e.to_string()))
@@ -92,7 +103,7 @@ impl DfsClientConn {
     fn handle_open(&mut self, open_path: &str) {
         let modified_str = open_path.trim_start_matches(|c| c == '/');
         let file_path = self.root_path.join(modified_str);
-        match File::open(file_path) {
+        match File::open(&file_path) {
             Ok(_) => send_ok_to_conn(&mut self.conn, ()),
             Err(e) => send_err_to_conn(&mut self.conn, io_err_to_axerr(e)),
         };
@@ -131,7 +142,7 @@ impl DfsClientConn {
         let modified_str = write_path.trim_start_matches('/');
         let file_path = self.root_path.join(modified_str);
 
-        match OpenOptions::new().write(true).append(true).open(file_path) {
+        match OpenOptions::new().write(true).append(true).open(&file_path) {
             Ok(mut f) => {
                 // Seek to the specified offset
                 // Write data into file of the specified length
@@ -244,7 +255,7 @@ impl DfsClientConn {
 
     fn handle_readdir(&mut self, rel_path: &str, start_index: u64) {
         let base_path = self.root_path.join(rel_path.trim_start_matches('/'));
-        let entities = fs::read_dir(base_path).unwrap().skip(start_index as _);
+        let entities = fs::read_dir(&base_path).unwrap().skip(start_index as _);
         let entities_col: Vec<_> = entities.collect();
         send_ok_to_conn(&mut self.conn, entities_col.len());
         for entry in entities_col {
@@ -318,7 +329,7 @@ fn send_ok_to_conn<T: Encode>(conn: &mut TcpStream, con: T) {
 }
 
 fn send_err_to_conn(conn: &mut TcpStream, e: AxError) {
-    let res_err: std::result::Result<String, i32> = Response::Err(e.code());
+    let res_err: Response<String> = Response::Err(e.code());
     bincode::encode_into_writer(&res_err, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
         "Error happen when writing back error response from connection: {:?}",
         conn
