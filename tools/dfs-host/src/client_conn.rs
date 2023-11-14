@@ -258,7 +258,7 @@ impl DfsClientConn {
     }
 
     fn handle_getparent(&mut self, rel_path: &str) {
-        let parent_path = Path::new(rel_path).parent();
+        let parent_path = Path::new(rel_path).parent().unwrap().to_string_lossy().to_string();
         send_ok_to_conn(&mut self.conn, parent_path);
     }
 
@@ -266,7 +266,6 @@ impl DfsClientConn {
         send_ok_to_conn(&mut self.conn, ());
     }
 
-    fn handle_(&self) {}
 }
 
 fn read_data_from_conn(buff: &mut [u8], conn: &mut TcpStream) -> usize {

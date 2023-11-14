@@ -1,9 +1,6 @@
-use axfs::distfs::request::Request;
-use axfs::distfs::request::Action::*;
-use axfs::distfs::BINCODE_CONFIG;
-use std::io::{Read, Result, Write};
+use std::io::Result;
 use std::path::PathBuf;
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
