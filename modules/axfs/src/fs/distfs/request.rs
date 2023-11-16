@@ -111,6 +111,8 @@ pub enum Action<'a> {
     Remove(Remove<'a>),
     ReadDir(ReadDir),
     Rename(Rename<'a>),
+
+    GetFileTree,
 }
 
 macro_rules! impl_into_action_impl {
