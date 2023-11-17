@@ -20,21 +20,20 @@ use axfs::distfs::BINCODE_CONFIG;
 
 use bincode::enc::write::Writer;
 use bincode::Encode;
-use crossbeam::queue::SegQueue;
 use dashmap::DashMap;
 
 #[cfg(feature = "axstd")]
 use crate::utils::*;
 
 use crate::host::NodeID;
+use crate::queue_request::MessageQueue;
 use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
 use crate::utils::{Path, PathBuf};
-use crate::queue_request::RequestOnQueue;
 
 pub struct DfsClientConn {
     root_path: PathBuf,
     conn: TcpStream,
-    peers: Arc<DashMap<NodeID, Arc<SegQueue<RequestOnQueue>>>>,
+    peers: Arc<DashMap<NodeID, Arc<MessageQueue>>>,
     file_index: Arc<DashMap<String, NodeID>>,
 }
 
@@ -52,7 +51,7 @@ impl DfsClientConn {
     pub fn new(
         root_path: PathBuf,
         conn: TcpStream,
-        peers: Arc<DashMap<NodeID, Arc<SegQueue<RequestOnQueue>>>>,
+        peers: Arc<DashMap<NodeID, Arc<MessageQueue>>>,
         file_index: Arc<DashMap<String, NodeID>>,
     ) -> Self {
         DfsClientConn {

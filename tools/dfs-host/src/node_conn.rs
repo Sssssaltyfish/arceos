@@ -1,13 +1,29 @@
-use crossbeam::queue::SegQueue;
 use std::net::TcpStream;
 use std::sync::Arc;
 
-use crate::utils::PathBuf;
-use crate::queue_request::RequestOnQueue;
+use alloc::string::String;
+use alloc::vec::Vec;
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
+
+use crate::host::NodeID;
+use crate::queue_request::MessageQueue;
+use crate::utils::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateIndex {
+    pub index: DashMap<String, NodeID>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PeerAction {
+    SerializedAction(Vec<u8>),
+    UpdateIndex(UpdateIndex),
+}
 
 pub struct DfsNodeOutConn {
     conn: TcpStream,
-    message_queue: Arc<SegQueue<RequestOnQueue>>,
+    message_queue: Arc<MessageQueue>,
 }
 
 pub struct DfsNodeInConn {
@@ -16,7 +32,7 @@ pub struct DfsNodeInConn {
 }
 
 impl DfsNodeOutConn {
-    pub fn new(conn: TcpStream, mq: Arc<SegQueue<RequestOnQueue>>) -> Self {
+    pub fn new(conn: TcpStream, mq: Arc<MessageQueue>) -> Self {
         DfsNodeOutConn {
             conn,
             message_queue: mq,

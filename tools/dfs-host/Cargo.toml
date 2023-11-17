@@ -25,6 +25,11 @@ version = "0.8.2"
 default-features = false
 features = ["alloc"]
 
+[dependencies.serde]
+version = "1.0.188"
+default-features = false
+features = ["derive", "alloc", "rc"]
+
 [dependencies]
 axfs = { path = "../../modules/axfs", features = ["distfs"] }
 axerrno = { path = "../../crates/axerrno" }

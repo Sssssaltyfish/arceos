@@ -21,22 +21,22 @@ pub(crate) fn unix_ty_to_axty(t: FileType) -> u8 {
     t as u8
 }
 
-pub(crate) trait AsPath: AsRef<str> {
+pub(crate) trait AsPath: AsRef<Path> {
     fn new<S>(s: &S) -> &Path
     where
-        S: AsRef<str> + ?Sized,
+        S: AsRef<Path> + ?Sized,
     {
         s.as_ref()
     }
 
-    fn join<S>(&self, s: S) -> String
+    fn join<S>(&self, s: S) -> PathBuf
     where
-        S: AsRef<str>,
+        S: AsRef<Path>,
     {
-        format!("{}/{}", self.as_ref(), s.as_ref())
+        format!("{}/{}", self.as_ref().trim_end_matches('/'), s.as_ref())
     }
 
-    fn to_string_lossy(&self) -> Cow<'_, str> {
+    fn to_string_lossy(&self) -> Cow<'_, Path> {
         Cow::Borrowed(self.as_ref())
     }
 
@@ -55,12 +55,12 @@ pub(crate) trait AsPath: AsRef<str> {
     }
 
     fn parent(&self) -> Option<&Path> {
-        let path = self.as_ref();
+        let path = self.as_ref().trim_end_matches('/');
         path.rfind('/').map(|last_idx| &path[..last_idx])
     }
 }
 
-impl AsPath for str {}
+impl AsPath for Path {}
 
 pub(crate) trait UnwrapSelf: Sized {
     fn unwrap(self) -> Self {

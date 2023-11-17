@@ -1002,6 +1002,7 @@ dependencies = [
  "dashmap",
  "env_logger",
  "log",
+ "serde",
 ]
 
 [[package]]

@@ -4,13 +4,12 @@ use std::thread;
 
 use alloc::{format, string::String};
 
-use crossbeam::queue::SegQueue;
 use dashmap::DashMap;
 
 use crate::client_conn::DfsClientConn;
 use crate::node_conn::{DfsNodeInConn, DfsNodeOutConn};
+use crate::queue_request::MessageQueue;
 use crate::utils::PathBuf;
-use crate::queue_request::RequestOnQueue;
 
 #[cfg(feature = "axstd")]
 use crate::utils::*;
@@ -24,7 +23,7 @@ const START_ADDRESS: &str = "127.0.0.1";
 pub struct DfsHost {
     node_id: NodeID,
     root_path: PathBuf,
-    peers_worker: Arc<DashMap<NodeID, Arc<SegQueue<RequestOnQueue>>>>,
+    peers_worker: Arc<DashMap<NodeID, Arc<MessageQueue>>>,
     file_index: Arc<DashMap<String, NodeID>>,
 }
 
@@ -80,7 +79,7 @@ impl DfsHost {
                             .expect(&format!("Failed to connect to node {}", in_conn_count));
                             let p = &peers_worker_ref;
                             let node_id = p.len();
-                            let mq = Arc::new(SegQueue::new());
+                            let mq = Arc::new(MessageQueue::new());
                             p.insert(node_id as NodeID, mq.clone());
                             let mut out_conn = DfsNodeOutConn::new(out_stream, mq.clone());
                             thread::spawn({
@@ -105,7 +104,7 @@ impl DfsHost {
                     .expect(&format!("Failed to connect to node {}", node));
             let p = &peers_worker_ref;
             let node_id = p.len();
-            let mq = Arc::new(SegQueue::new());
+            let mq = Arc::new(MessageQueue::new());
             p.insert(node_id as NodeID, mq.clone());
             let mut out_conn = DfsNodeOutConn::new(out_stream, mq.clone());
             thread::spawn({
