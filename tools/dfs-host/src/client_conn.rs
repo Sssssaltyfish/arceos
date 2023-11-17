@@ -1,7 +1,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[cfg(not(feature = "axstd"))]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -26,9 +26,10 @@ use dashmap::DashMap;
 #[cfg(feature = "axstd")]
 use crate::utils::*;
 
-use crate::host::{NodeID, RequestOnQueue};
+use crate::host::NodeID;
 use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
 use crate::utils::{Path, PathBuf};
+use crate::queue_request::RequestOnQueue;
 
 pub struct DfsClientConn {
     root_path: PathBuf,
@@ -90,7 +91,7 @@ impl DfsClientConn {
                 Action::Rename(rename) => {
                     self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
                 }
-                Action::GetFileTree => todo!(),
+                Action::SetFileTree(set_file_index) => todo!(),
             }
         }
 

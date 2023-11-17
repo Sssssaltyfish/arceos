@@ -1,3 +1,4 @@
+use alloc::collections::BTreeMap;
 use axerrno::{ax_err_type, AxResult};
 use axfs_vfs::{TryFromPrimitive, VfsDirEntry, VfsNodeType};
 use axnet::TcpSocket;
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::tcpio::{TcpIO, BINCODE_CONFIG};
 
 pub type Response<T> = core::result::Result<T, i32>;
+pub type NodeID = u32;
 
 pub(super) trait NodeTypeFromPrimitive: Copy {
     fn to_node_type(self) -> AxResult<VfsNodeType>;
@@ -94,6 +96,11 @@ pub struct Rename<'s> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
+pub struct SetFileIndex<'s> {
+    pub file_index: BTreeMap<&'s str, NodeID>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 #[repr(u8)]
 pub enum Action<'a> {
     Open,
@@ -112,7 +119,7 @@ pub enum Action<'a> {
     ReadDir(ReadDir),
     Rename(Rename<'a>),
 
-    GetFileTree,
+    SetFileTree(SetFileIndex<'a>),
 }
 
 macro_rules! impl_into_action_impl {

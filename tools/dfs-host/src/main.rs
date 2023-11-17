@@ -9,6 +9,7 @@ mod client_conn;
 mod host;
 mod node_conn;
 mod utils;
+mod queue_request;
 
 #[cfg(not(feature = "axstd"))]
 fn main() {
