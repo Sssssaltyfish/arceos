@@ -998,6 +998,7 @@ dependencies = [
  "axfs",
  "axstd",
  "bincode",
+ "compact_str",
  "crossbeam",
  "dashmap",
  "env_logger",

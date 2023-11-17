@@ -10,6 +10,7 @@ mod host;
 mod node_conn;
 mod utils;
 mod queue_request;
+mod conn_utils;
 
 #[cfg(not(feature = "axstd"))]
 fn main() {

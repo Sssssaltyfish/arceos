@@ -13,13 +13,11 @@ use alloc::{
     vec::Vec,
 };
 
-use axerrno::AxError;
 use axfs::distfs::request::{Action, DirEntry};
 use axfs::distfs::request::{NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
 
 use bincode::enc::write::Writer;
-use bincode::Encode;
 use dashmap::DashMap;
 
 #[cfg(feature = "axstd")]
@@ -27,8 +25,8 @@ use crate::utils::*;
 
 use crate::host::NodeID;
 use crate::queue_request::MessageQueue;
-use crate::utils::{io_err_to_axerr, unix_ty_to_axty};
-use crate::utils::{Path, PathBuf};
+use crate::utils::{io_err_to_axerr, unix_ty_to_axty, Path, PathBuf};
+use crate::conn_utils::*;
 
 pub struct DfsClientConn {
     root_path: PathBuf,
@@ -72,7 +70,7 @@ impl DfsClientConn {
                 // Todo: close connection here
                 return;
             }
-            let req = deserialize_data_from_buff(&buff, bytes_read);
+            let req = deserialize_client_request_from_buff(&buff, bytes_read);
             logger::debug!("Received: {:?}", req);
             match req.action {
                 Action::Open => self.handle_open(req.relpath),
@@ -90,7 +88,6 @@ impl DfsClientConn {
                 Action::Rename(rename) => {
                     self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
                 }
-                Action::SetFileTree(set_file_index) => todo!(),
             }
         }
 
@@ -293,46 +290,4 @@ impl DfsClientConn {
     fn handle_fsync(&mut self) {
         send_ok_to_conn(&mut self.conn, ());
     }
-}
-
-fn read_data_from_conn(buff: &mut [u8], conn: &mut TcpStream) -> usize {
-    let bytes_read = conn
-        .read(buff)
-        .map_err(|e| {
-            logger::error!("Error reading bytes from connection: {:?}", conn);
-            send_err_to_conn(conn, io_err_to_axerr(e))
-        })
-        .unwrap();
-    bytes_read
-}
-
-fn deserialize_data_from_buff<'a>(
-    buff: &'a [u8],
-    bytes_read: usize,
-    // conn: &'a mut TcpStream,
-) -> axfs::distfs::request::Request<'a, 'a> {
-    let (req, _) =
-        bincode::borrow_decode_from_slice::<Request, _>(&buff[..bytes_read], BINCODE_CONFIG)
-            .map_err(|e| {
-                logger::error!("Error deserializing from connection: {}", e);
-                // send_err_to_conn(conn, io_err_to_axerr(ErrorKind::InvalidData.into()))
-            })
-            .unwrap();
-    req
-}
-
-fn send_ok_to_conn<T: Encode>(conn: &mut TcpStream, con: T) {
-    let res = Response::Ok(con);
-    bincode::encode_into_writer(&res, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
-        "Error happen when writing back success response from connection: {:?}",
-        conn
-    ))
-}
-
-fn send_err_to_conn(conn: &mut TcpStream, e: AxError) {
-    let res_err: Response<String> = Response::Err(e.code());
-    bincode::encode_into_writer(&res_err, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
-        "Error happen when writing back error response from connection: {:?}",
-        conn
-    ));
 }

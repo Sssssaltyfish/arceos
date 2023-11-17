@@ -1,4 +1,3 @@
-use alloc::collections::BTreeMap;
 use axerrno::{ax_err_type, AxResult};
 use axfs_vfs::{TryFromPrimitive, VfsDirEntry, VfsNodeType};
 use axnet::TcpSocket;
@@ -96,11 +95,6 @@ pub struct Rename<'s> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
-pub struct SetFileIndex<'s> {
-    pub file_index: BTreeMap<&'s str, NodeID>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Encode, BorrowDecode)]
 #[repr(u8)]
 pub enum Action<'a> {
     Open,
@@ -118,8 +112,6 @@ pub enum Action<'a> {
     Remove(Remove<'a>),
     ReadDir(ReadDir),
     Rename(Rename<'a>),
-
-    SetFileTree(SetFileIndex<'a>),
 }
 
 macro_rules! impl_into_action_impl {
