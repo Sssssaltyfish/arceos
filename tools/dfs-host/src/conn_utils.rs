@@ -16,11 +16,11 @@ use axfs::distfs::BINCODE_CONFIG;
 use bincode::enc::write::Writer;
 use bincode::Encode;
 
+use crate::queue_request;
 #[cfg(feature = "axstd")]
 use crate::utils::*;
 
 use crate::utils::io_err_to_axerr;
-
 
 pub(super) struct Tcpio<'a>(pub &'a mut TcpStream);
 
@@ -50,9 +50,24 @@ pub fn deserialize_client_request_from_buff<'a>(
     let (req, _) =
         bincode::borrow_decode_from_slice::<Request, _>(&buff[..bytes_read], BINCODE_CONFIG)
             .map_err(|e| {
-                logger::error!("Error deserializing from connection: {}", e);
+                logger::error!("Error deserializing client request from connection: {}", e);
             })
             .unwrap();
+    req
+}
+
+pub fn deserialize_node_request_from_buff(
+    buff: &[u8],
+    bytes_read: usize,
+) -> queue_request::PeerAction {
+    let (req, _) = bincode::serde::decode_from_slice::<queue_request::PeerAction, _>(
+        &buff[..bytes_read],
+        BINCODE_CONFIG,
+    )
+    .map_err(|e| {
+        logger::error!("Error deserializing peer action from connection: {}", e);
+    })
+    .unwrap();
     req
 }
 

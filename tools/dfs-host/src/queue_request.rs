@@ -1,11 +1,13 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Mutex, thread};
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use axfs::distfs::request::Response;
 use crossbeam::queue::SegQueue;
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 
-use crate::{host::NodeID, node_conn::PeerAction, utils::*};
+use crate::{host::NodeID, utils::*};
 
 pub struct MessageQueue(SegQueue<Arc<RequestFuture>>);
 
@@ -40,6 +42,18 @@ impl MessageQueue {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexMap {
+    pub index: DashMap<String, NodeID>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PeerAction {
+    SerializedAction(Vec<u8>),
+    UpdateIndex(IndexMap),
+    RemoveIndex(Vec<String>),
 }
 
 // directly forward serialized content to simplify everything

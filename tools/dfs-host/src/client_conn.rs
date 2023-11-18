@@ -71,7 +71,7 @@ impl DfsClientConn {
                 return;
             }
             let req = deserialize_client_request_from_buff(&buff, bytes_read);
-            logger::debug!("Received: {:?}", req);
+            logger::debug!("Received client request: {:?}", req);
             match req.action {
                 Action::Open => self.handle_open(req.relpath),
                 Action::Release => self.handle_release(),
