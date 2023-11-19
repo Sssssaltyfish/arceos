@@ -1,7 +1,6 @@
 use std::{
     format,
     fs::{self, FileType},
-    io,
     net::{TcpListener, TcpStream},
     sync::MutexGuard,
 };
@@ -9,6 +8,11 @@ use std::{
 use alloc::{borrow::Cow, string::String};
 
 use axerrno::AxError;
+
+pub(crate) mod io {
+    pub(crate) type ErrorKind = std::io::Error;
+    pub(crate) use std::io::*;
+}
 
 pub(crate) type PathBuf = String;
 pub(crate) type Path = str;

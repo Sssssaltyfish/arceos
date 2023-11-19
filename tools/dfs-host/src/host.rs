@@ -144,6 +144,7 @@ impl DfsHost {
                     // Create a new DfsClientConn instance for each connection and store it
                     let mut new_client = DfsClientConn::new(
                         // Initialize fields for DfsClientConn as needed
+                        self.node_id,
                         self.root_path.clone(),
                         client_stream,
                         self.peers_worker.clone(),

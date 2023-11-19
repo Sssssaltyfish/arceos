@@ -21,7 +21,7 @@ use bincode::Encode;
 
 use crate::utils::{unix_ty_to_axty, Path, PathBuf};
 
-use crate::queue_request;
+use crate::queue_request::{self, ReturnTypeYouNeed};
 #[cfg(feature = "axstd")]
 use crate::utils::*;
 
@@ -88,6 +88,13 @@ pub fn send_err_to_conn(conn: &mut TcpStream, e: AxError) {
     let res_err: Response<String> = Response::Err(e.code());
     bincode::encode_into_writer(&res_err, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
         "Error happen when writing back error response from connection: {:?}",
+        conn
+    ));
+}
+
+pub fn send_serialized_data_to_conn(conn: &mut TcpStream, res: ReturnTypeYouNeed) {
+    bincode::encode_into_writer(&res, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
+        "Error happen when writing back serialized response from connection: {:?}",
         conn
     ));
 }

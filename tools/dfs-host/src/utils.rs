@@ -6,12 +6,13 @@ pub(crate) use utils_impl::*;
 
 #[cfg(not(feature = "axstd"))]
 mod utils_impl {
-    use std::{fs::FileType, io};
+    use std::fs::FileType;
 
     use axerrno::AxError;
 
     use std::os::unix::prelude::FileTypeExt;
 
+    pub use std::io;
     pub use std::path::{Path, PathBuf};
 
     pub(crate) fn io_err_to_axerr(e: io::Error) -> AxError {
