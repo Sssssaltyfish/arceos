@@ -6,7 +6,7 @@ mod mount;
 
 pub use self::dir::{DirBuilder, DirEntry, ReadDir};
 pub use self::file::{File, FileType, Metadata, OpenOptions, Permissions};
-pub use self::mount::{MountFlag, mount, umount};
+pub use self::mount::{mount, umount, MountFlag};
 
 use alloc::{string::String, vec::Vec};
 use axio::{self as io, prelude::*};

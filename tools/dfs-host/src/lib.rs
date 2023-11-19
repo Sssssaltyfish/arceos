@@ -10,7 +10,7 @@ extern crate alloc;
 pub mod host;
 
 mod client_conn;
-mod node_conn;
-mod utils;
-mod queue_request;
 mod conn_utils;
+mod node_conn;
+mod queue_request;
+mod utils;

@@ -3,12 +3,12 @@
 
 extern crate alloc;
 
-use bincode::{Encode, Decode};
 use alloc::{borrow::ToOwned, string::String, vec, vec::Vec};
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-pub use serde;
 pub use bincode;
+pub use serde;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encode, Decode, PartialEq, Eq)]
 pub enum EnumPayload {

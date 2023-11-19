@@ -63,7 +63,11 @@ impl DfsHost {
                             "Accepted a new peer connection from: {:?}",
                             in_stream.peer_addr()
                         );
-                        let mut in_conn = DfsNodeInConn::new(root_path_ref.clone(), in_stream, file_index_ref.clone());
+                        let mut in_conn = DfsNodeInConn::new(
+                            root_path_ref.clone(),
+                            in_stream,
+                            file_index_ref.clone(),
+                        );
                         in_conn_count += 1;
                         // Distribute to handle thread
                         thread::spawn({

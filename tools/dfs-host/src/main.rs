@@ -6,11 +6,11 @@ extern crate axstd as std;
 extern crate alloc;
 
 mod client_conn;
+mod conn_utils;
 mod host;
 mod node_conn;
-mod utils;
 mod queue_request;
-mod conn_utils;
+mod utils;
 
 #[cfg(not(feature = "axstd"))]
 fn main() {

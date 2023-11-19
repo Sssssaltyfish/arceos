@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::net::TcpStream;
 use std::sync::Arc;
 
@@ -5,7 +6,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use dashmap::DashMap;
 
-use crate::conn_utils::{deserialize_node_request_from_buff, read_data_from_conn, deserialize_client_request_from_buff};
+use crate::conn_utils::{
+    deserialize_client_request_from_buff, deserialize_node_request_from_buff, read_data_from_conn, DfsServer,
+};
 use crate::host::NodeID;
 use crate::queue_request::{MessageQueue, PeerAction};
 use crate::utils::*;
@@ -33,9 +36,27 @@ impl DfsNodeOutConn {
     pub fn handle_conn(&mut self) {}
 }
 
+impl DfsServer for DfsNodeInConn {
+    fn get_tcp_stream(&mut self) -> &mut TcpStream {
+        &mut self.conn
+    }
+
+    fn get_root_path(&self) -> PathBuf {
+        self.root_path.clone()
+    }
+}
+
 impl DfsNodeInConn {
-    pub fn new(root_path: PathBuf, conn: TcpStream, file_index: Arc<DashMap<String, NodeID>>) -> Self {
-        DfsNodeInConn { root_path, conn, file_index }
+    pub fn new(
+        root_path: PathBuf,
+        conn: TcpStream,
+        file_index: Arc<DashMap<String, NodeID>>,
+    ) -> Self {
+        DfsNodeInConn {
+            root_path,
+            conn,
+            file_index,
+        }
     }
 
     pub fn handle_conn(&mut self) {
@@ -52,38 +73,44 @@ impl DfsNodeInConn {
                 PeerAction::SerializedAction(action) => {
                     let req = deserialize_client_request_from_buff(&action, action.len());
                     match req.action {
-                        Action::Open => self.handle_(),
-                        Action::Release => self.handle_(),
-                        Action::GetAttr => self.handle_(),
-                        Action::Read(read) => self.handle_(),
-                        Action::Write(write) => self.handle_(),
-                        Action::Fsync => self.handle_(),
-                        Action::Trunc(trunc) => self.handle_(),
-                        Action::GetParent => self.handle_(),
-                        Action::Lookup(lookup) => self.handle_(),
-                        Action::Create(create) => self.handle_(),
-                        Action::Remove(remove) => self.handle_(),
-                        Action::ReadDir(readdir) => self.handle_(),
-                        Action::Rename(rename) => self.handle_(),
+                        Action::Open => self.handle_open(req.relpath),
+                        Action::Release => self.handle_release(),
+                        Action::GetAttr => self.handle_getattr(req.relpath),
+                        Action::Read(read) => {
+                            self.handle_read(req.relpath, read.offset, read.length)
+                        }
+                        Action::Write(write) => {
+                            self.handle_write(req.relpath, write.offset, write.content)
+                        }
+                        Action::Fsync => self.handle_fsync(),
+                        Action::Trunc(trunc) => self.handle_trunc(req.relpath, trunc.size),
+                        Action::GetParent => self.handle_getparent(req.relpath),
+                        Action::Lookup(lookup) => self.handle_lookup(req.relpath, lookup.path),
+                        Action::Create(create) => self.handle_create(req.relpath, create.path),
+                        Action::Remove(remove) => self.handle_remove(req.relpath, remove.path),
+                        Action::ReadDir(readdir) => {
+                            self.handle_readdir(req.relpath, readdir.start_idx)
+                        }
+                        Action::Rename(rename) => {
+                            self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
+                        }
                     }
-                },
+                }
                 PeerAction::UpdateIndex(update_index) => {
                     self.handle_update_index(update_index.index)
                 }
-                PeerAction::RemoveIndex(remove_index) => {
-                    self.handle_remove_index(remove_index)
-                }
+                PeerAction::RemoveIndex(remove_index) => self.handle_remove_index(remove_index),
             }
         }
     }
-
-    fn handle_(&self) {}
 
     fn handle_update_index(&self, index_map: DashMap<String, NodeID>) {
         let file_index = &self.file_index;
         for entry in index_map.iter() {
             if file_index.contains_key(entry.key()) {
-                logger::error!("Unachieable circumstance: key already exist in file index when updating!")
+                logger::error!(
+                    "Unachieable circumstance: key already exist in file index when updating!"
+                )
             }
             file_index.insert(entry.key().clone(), *entry.value());
         }
@@ -93,7 +120,9 @@ impl DfsNodeInConn {
         let file_index = &self.file_index;
         for entry in index_map.iter() {
             let _ = file_index.remove(entry).ok_or_else(|| {
-                logger::error!("Unachieable circumstance: key doesn't exist in file index when removing!")
+                logger::error!(
+                    "Unachieable circumstance: key doesn't exist in file index when removing!"
+                )
             });
         }
     }

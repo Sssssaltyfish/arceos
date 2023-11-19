@@ -79,7 +79,10 @@ impl RootDirectory {
                 mounts.swap_remove(pos);
                 Ok(())
             }
-            None => ax_err!(NotFound, format_args!(r#"mount point "{}" not found"#, path)),
+            None => ax_err!(
+                NotFound,
+                format_args!(r#"mount point "{}" not found"#, path)
+            ),
         }
     }
 
@@ -252,7 +255,9 @@ pub(crate) fn create_dir(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {
 pub(crate) fn create_dir_all(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {
     match lookup(dir, path) {
         Ok(_) => ax_err!(AlreadyExists),
-        Err(AxError::NotFound) => parent_node_of(dir, path).create_recursive(path, VfsNodeType::Dir),
+        Err(AxError::NotFound) => {
+            parent_node_of(dir, path).create_recursive(path, VfsNodeType::Dir)
+        }
         Err(e) => Err(e),
     }
 }

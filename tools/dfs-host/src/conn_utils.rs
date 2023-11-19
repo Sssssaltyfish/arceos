@@ -1,4 +1,5 @@
-use std::io::{Read, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::TcpStream;
 
 #[cfg(not(feature = "axstd"))]
@@ -7,14 +8,18 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use alloc::{
     format,
     string::{String, ToString},
+    vec,
+    vec::Vec,
 };
 
 use axerrno::AxError;
-use axfs::distfs::request::{Request, Response};
+use axfs::distfs::request::{DirEntry, NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
 
 use bincode::enc::write::Writer;
 use bincode::Encode;
+
+use crate::utils::{unix_ty_to_axty, Path, PathBuf};
 
 use crate::queue_request;
 #[cfg(feature = "axstd")]
@@ -85,4 +90,205 @@ pub fn send_err_to_conn(conn: &mut TcpStream, e: AxError) {
         "Error happen when writing back error response from connection: {:?}",
         conn
     ));
+}
+
+pub trait DfsServer {
+    fn handle_open(&mut self, open_path: &str) {
+        let modified_str = open_path.trim_start_matches(|c| c == '/');
+        let file_path = self.get_root_path().join(modified_str);
+        match File::open(&file_path) {
+            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        };
+    }
+
+    fn handle_read(&mut self, read_path: &str, offset: u64, length: u64) {
+        let modified_str = read_path.trim_start_matches(|c| c == '/');
+        let file_path = self.get_root_path().join(modified_str);
+
+        match File::open(file_path) {
+            Ok(mut f) => {
+                let mut buffer = vec![0; length as usize];
+                // Seek to the specified offset
+                // Read data into a buffer of the specified length
+                f.seek(SeekFrom::Start(offset))
+                    .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)))
+                    .and_then(|_| {
+                        let size = f
+                            .read(&mut buffer)
+                            .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e))).unwrap();
+                        send_ok_to_conn(self.get_tcp_stream(), size as u64);
+                        self.get_tcp_stream().write_all(&buffer[..size]).expect(
+                            &format!(
+                                "Error happen when writing back read content response from connection: {:?}",
+                                self.get_tcp_stream()
+                            ),
+                        );
+                        Ok(())
+                    }).unwrap();
+            }
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        };
+    }
+
+    fn handle_write(&mut self, write_path: &str, offset: u64, content: &[u8]) {
+        let modified_str = write_path.trim_start_matches('/');
+        let file_path = self.get_root_path().join(modified_str);
+
+        match OpenOptions::new().write(true).append(true).open(&file_path) {
+            Ok(mut f) => {
+                // Seek to the specified offset
+                // Write data into file of the specified length
+                f.seek(SeekFrom::Start(offset))
+                    .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)))
+                    .and_then(|_| {
+                        f.write_all(content)
+                            .map_err(|e| {
+                                send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e))
+                            })
+                            .unwrap();
+                        send_ok_to_conn(self.get_tcp_stream(), content.len() as u64);
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_lookup(&mut self, rel_path: &str, lookup_path: &str) {
+        let path = PathBuf::new()
+            .join(rel_path.trim_start_matches('/'))
+            .join(lookup_path.trim_start_matches('/'));
+        match File::open(self.get_root_path().join(path)) {
+            Ok(_) => {
+                let res = PathBuf::new()
+                    .join(rel_path.trim_start_matches('/'))
+                    .join(lookup_path.trim_start_matches('/'))
+                    .to_string_lossy()
+                    .to_string();
+                send_ok_to_conn(self.get_tcp_stream(), res);
+            }
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        };
+    }
+
+    fn handle_create(&mut self, rel_path: &str, create_path: &str) {
+        match File::create(
+            self.get_root_path()
+                .join(rel_path.trim_start_matches('/'))
+                .join(create_path.trim_start_matches('/')),
+        ) {
+            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_trunc(&mut self, rel_path: &str, size: u64) {
+        let file_path = self.get_root_path().join(rel_path);
+        match OpenOptions::new().write(true).open(file_path) {
+            Ok(f) => {
+                f.set_len(size)
+                    .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)))
+                    .unwrap();
+                send_ok_to_conn(self.get_tcp_stream(), ());
+            }
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_release(&mut self) {
+        send_ok_to_conn(self.get_tcp_stream(), ());
+    }
+
+    fn handle_getattr(&mut self, rel_path: &str) {
+        match File::open(self.get_root_path().join(rel_path.trim_start_matches('/'))) {
+            Ok(f) => {
+                let meta = f.metadata().unwrap();
+                let mode = meta.permissions().mode() as u16 & 0o777;
+                let ty = meta.file_type();
+                let ty = unix_ty_to_axty(ty);
+                let size = meta.len();
+                let blocks = meta.blocks();
+                let attr = NodeAttr {
+                    mode,
+                    ty,
+                    size,
+                    blocks,
+                };
+                send_ok_to_conn(self.get_tcp_stream(), attr);
+            }
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_rename(&mut self, rel_path: &str, src_path: &str, dst_path: &str) {
+        let src = self
+            .get_root_path()
+            .join(rel_path.trim_start_matches('/'))
+            .join(src_path.trim_start_matches('/'));
+        let dst = self
+            .get_root_path()
+            .join(rel_path.trim_start_matches('/'))
+            .join(dst_path.trim_start_matches('/'));
+        match fs::rename(src, dst) {
+            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_remove(&mut self, rel_path: &str, remove_path: &str) {
+        let path = self
+            .get_root_path()
+            .join(rel_path.trim_start_matches('/'))
+            .join(remove_path.trim_start_matches('/'));
+        match fs::remove_file(path) {
+            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+        }
+    }
+
+    fn handle_readdir(&mut self, rel_path: &str, start_index: u64) {
+        let base_path = self.get_root_path().join(rel_path.trim_start_matches('/'));
+        let entities = fs::read_dir(&base_path).unwrap().skip(start_index as _);
+        let entities_col: Vec<_> = entities.collect();
+        send_ok_to_conn(self.get_tcp_stream(), entities_col.len());
+        for entry in entities_col {
+            match entry {
+                Ok(e) => {
+                    if e.path().is_dir() || e.path().is_file() {
+                        bincode::serde::encode_into_writer(
+                            &DirEntry {
+                                ty: unix_ty_to_axty(e.file_type().unwrap()),
+                                name: e.file_name().to_string_lossy().into(),
+                            },
+                            Tcpio(self.get_tcp_stream()),
+                            BINCODE_CONFIG,
+                        )
+                        .expect("Error when writing back serialized entry data;");
+                    } else {
+                        unreachable!()
+                    }
+                }
+                Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            }
+        }
+    }
+
+    fn handle_getparent(&mut self, rel_path: &str) {
+        let parent_path = Path::new(rel_path)
+            .parent()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        send_ok_to_conn(self.get_tcp_stream(), parent_path);
+    }
+
+    fn handle_fsync(&mut self) {
+        send_ok_to_conn(self.get_tcp_stream(), ());
+    }
+
+    fn get_tcp_stream(&mut self) -> &mut TcpStream;
+
+    fn get_root_path(&self) -> PathBuf;
 }
