@@ -1,4 +1,4 @@
-use std::io::{Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::sync::Arc;
 
@@ -90,7 +90,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_getattr(req.relpath)
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -99,7 +102,7 @@ impl DfsClientConn {
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
                     }
-                },
+                }
                 Action::Read(read) => {
                     let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
                     let file_node = self.get_node_of_file(file_path_str);
@@ -108,7 +111,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_read(file_path_str, read.offset, read.length);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -126,7 +132,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_write(file_path_str, write.offset, write.content);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -145,7 +154,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_trunc(req.relpath, trunc.size)
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -163,7 +175,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_getparent(file_path_str);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -172,7 +187,7 @@ impl DfsClientConn {
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
                     }
-                },
+                }
                 Action::Lookup(lookup) => {
                     let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
                     let file_node = self.get_node_of_file(file_path_str);
@@ -181,7 +196,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_lookup(req.relpath, lookup.path);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -199,7 +217,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_create(req.relpath, create.path);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -217,7 +238,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_remove(req.relpath, remove.path);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -235,7 +259,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_readdir(req.relpath, readdir.start_idx);
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
@@ -253,7 +280,10 @@ impl DfsClientConn {
                             if node_id == self.node_id {
                                 self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
                             } else {
-                                let res = self.switch_to_peer(&node_id, PeerAction::SerializedAction(buff[..bytes_read].to_vec()));
+                                let res = self.switch_to_peer(
+                                    &node_id,
+                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
+                                );
                                 send_serialized_data_to_conn(self.get_tcp_stream(), res);
                             }
                         }
