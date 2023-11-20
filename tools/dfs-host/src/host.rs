@@ -51,6 +51,7 @@ impl DfsHost {
             self.node_id + NODE_START_PORT
         );
 
+        let node_id_ref = self.node_id;
         let root_path_ref = self.root_path.clone();
         let peers_worker_ref = self.peers_worker.clone();
         let file_index_ref = self.file_index.clone();
@@ -64,8 +65,10 @@ impl DfsHost {
                             in_stream.peer_addr()
                         );
                         let mut in_conn = DfsNodeInConn::new(
+                            node_id_ref,
                             root_path_ref.clone(),
                             in_stream,
+                            peers_worker_ref.clone(),
                             file_index_ref.clone(),
                         );
                         in_conn_count += 1;
@@ -84,11 +87,15 @@ impl DfsHost {
                             .expect(&format!("Failed to connect to node {}", in_conn_count));
                             let p = &peers_worker_ref;
                             let node_id = p.len();
+                            let init_file_index_ref = file_index_ref.clone();
                             let mq = Arc::new(MessageQueue::new());
                             p.insert(node_id as NodeID, mq.clone());
                             let mut out_conn = DfsNodeOutConn::new(out_stream, mq.clone());
                             thread::spawn({
                                 move || {
+                                    if node_id_ref == 0 {
+                                        out_conn.send_init_index(init_file_index_ref.clone());
+                                    }
                                     out_conn.handle_conn();
                                 }
                             });

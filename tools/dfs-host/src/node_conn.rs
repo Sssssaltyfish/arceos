@@ -8,8 +8,7 @@ use dashmap::DashMap;
 
 use crate::conn_utils::{
     deserialize_client_request_from_buff, deserialize_node_request_from_buff,
-    deserialize_response_from_buff, read_data_from_conn, DfsServer,
-    Tcpio,
+    deserialize_response_from_buff, read_data_from_conn, DfsServer, Tcpio, send_ok_to_conn,
 };
 use crate::host::NodeID;
 use crate::queue_request::{MessageQueue, PeerAction};
@@ -22,8 +21,10 @@ pub struct DfsNodeOutConn {
 }
 
 pub struct DfsNodeInConn {
+    node_id: NodeID,
     root_path: PathBuf,
     conn: TcpStream,
+    peers: Arc<DashMap<NodeID, Arc<MessageQueue>>>,
     file_index: Arc<DashMap<String, NodeID>>,
 }
 
@@ -54,9 +55,29 @@ impl DfsNodeOutConn {
             })
         }
     }
+
+    pub fn send_init_index(&self, file_index: Arc<DashMap<String, NodeID>>) {
+        let init_index = DashMap::new();
+        for entry in file_index.iter() {
+            init_index.insert(entry.key().clone(), *entry.value());
+        }
+        let _ = self.message_queue.submit_and_wait(PeerAction::InitIndex(init_index));
+    }
 }
 
 impl DfsServer for DfsNodeInConn {
+    fn get_node_id(&self) -> NodeID {
+        self.node_id
+    }
+
+    fn get_peers(&self) -> Arc<DashMap<NodeID, Arc<MessageQueue>>> {
+        self.peers.clone()
+    }
+
+    fn get_file_index(&self) -> Arc<DashMap<String, NodeID>> {
+        self.file_index.clone()
+    }
+
     fn get_tcp_stream(&mut self) -> &mut TcpStream {
         &mut self.conn
     }
@@ -68,13 +89,17 @@ impl DfsServer for DfsNodeInConn {
 
 impl DfsNodeInConn {
     pub fn new(
+        node_id: NodeID,
         root_path: PathBuf,
         conn: TcpStream,
+        peers: Arc<DashMap<NodeID, Arc<MessageQueue>>>,
         file_index: Arc<DashMap<String, NodeID>>,
     ) -> Self {
         DfsNodeInConn {
+            node_id,
             root_path,
             conn,
+            peers,
             file_index,
         }
     }
@@ -106,24 +131,45 @@ impl DfsNodeInConn {
                         Action::Trunc(trunc) => self.handle_trunc(req.relpath, trunc.size),
                         Action::GetParent => self.handle_getparent(req.relpath),
                         Action::Lookup(lookup) => self.handle_lookup(req.relpath, lookup.path),
-                        Action::Create(create) => self.handle_create(req.relpath, create.path),
-                        Action::Remove(remove) => self.handle_remove(req.relpath, remove.path),
+                        Action::Create(create) => {
+                            self.handle_create(req.relpath, create.path);
+                            self.handle_insert_index(req.relpath, create.path);
+                        }
+                        Action::Remove(remove) => {
+                            self.handle_remove(req.relpath, remove.path);
+                            self.handle_remove_index(req.relpath, remove.path);
+                        }
                         Action::ReadDir(readdir) => {
                             self.handle_readdir(req.relpath, readdir.start_idx)
                         }
+
                         Action::Rename(rename) => {
-                            self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
+                            self.handle_rename(req.relpath, rename.src_path, rename.dst_path);
+                            self.handle_update_index(req.relpath, rename.src_path, rename.dst_path);
                         }
                     }
                 }
-                PeerAction::InsertIndex(insert_index) => self.handle_insert_index(insert_index),
-                PeerAction::RemoveIndex(remove_index) => self.handle_remove_index(remove_index),
-                PeerAction::UpdateIndex(update_index) => self.handle_update_index(update_index),
+                PeerAction::InsertIndex(insert_index) => {
+                    self.handle_outer_insert_index(insert_index);
+                    send_ok_to_conn(&mut self.conn, ());
+                }
+                PeerAction::RemoveIndex(remove_index) => {
+                    self.handle_outer_remove_index(remove_index);
+                    send_ok_to_conn(&mut self.conn, ());
+                }
+                PeerAction::UpdateIndex(update_index) => {
+                    self.handle_outer_update_index(update_index);
+                    send_ok_to_conn(&mut self.conn, ());
+                }
+                PeerAction::InitIndex(init_index) => {
+                    self.handle_outer_init_index(init_index);
+                    send_ok_to_conn(&mut self.conn, ());
+                }
             }
         }
     }
 
-    fn handle_update_index(&self, index_map: DashMap<String, String>) {
+    fn handle_outer_update_index(&self, index_map: DashMap<String, String>) {
         let file_index = &self.file_index;
         for entry in index_map.iter() {
             let node_id = file_index
@@ -139,7 +185,7 @@ impl DfsNodeInConn {
         }
     }
 
-    fn handle_insert_index(&self, index_map: DashMap<String, NodeID>) {
+    fn handle_outer_insert_index(&self, index_map: DashMap<String, NodeID>) {
         let file_index = &self.file_index;
         for entry in index_map.iter() {
             if file_index.contains_key(entry.key()) {
@@ -151,7 +197,7 @@ impl DfsNodeInConn {
         }
     }
 
-    fn handle_remove_index(&self, index_map: Vec<String>) {
+    fn handle_outer_remove_index(&self, index_map: Vec<String>) {
         let file_index = &self.file_index;
         for entry in index_map.iter() {
             let _ = file_index.remove(entry).ok_or_else(|| {
@@ -160,5 +206,9 @@ impl DfsNodeInConn {
                 )
             });
         }
+    }
+
+    fn handle_outer_init_index(&mut self, index_map: DashMap<String, NodeID>) {
+        self.file_index = index_map.into();
     }
 }

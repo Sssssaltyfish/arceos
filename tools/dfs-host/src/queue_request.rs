@@ -47,6 +47,7 @@ impl MessageQueue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PeerAction {
     SerializedAction(Vec<u8>),
+    InitIndex(DashMap<String, NodeID>),
     InsertIndex(DashMap<String, NodeID>),
     RemoveIndex(Vec<String>),
     UpdateIndex(DashMap<String, String>),

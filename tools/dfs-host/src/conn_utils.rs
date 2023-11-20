@@ -5,6 +5,7 @@ use std::net::TcpStream;
 #[cfg(not(feature = "axstd"))]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
+use alloc::sync::Arc;
 use alloc::{
     format,
     string::{String, ToString},
@@ -18,10 +19,12 @@ use axfs::distfs::BINCODE_CONFIG;
 
 use bincode::enc::write::Writer;
 use bincode::Encode;
+use dashmap::DashMap;
 
+use crate::host::NodeID;
 use crate::utils::{unix_ty_to_axty, Path, PathBuf};
 
-use crate::queue_request::{self, ReturnTypeYouNeed};
+use crate::queue_request::{self, MessageQueue, PeerAction, ReturnTypeYouNeed};
 #[cfg(feature = "axstd")]
 use crate::utils::*;
 
@@ -306,6 +309,71 @@ pub trait DfsServer {
     fn handle_fsync(&mut self) {
         send_ok_to_conn(self.get_tcp_stream(), ());
     }
+
+    fn handle_insert_index(&self, rel_path: &str, create_path: &str) {
+        let rel_path_str = PathBuf::new()
+            .join(rel_path.trim_start_matches('/'))
+            .join(create_path.trim_start_matches('/'));
+        let rel_path = rel_path_str.to_string_lossy().to_string();
+        let create_index = DashMap::new();
+        create_index.insert(rel_path.clone(), self.get_node_id());
+        (&self.get_file_index()).insert(rel_path, self.get_node_id());
+        for peer in self.get_peers().iter() {
+            let p = peer.value();
+            p.submit_and_wait(PeerAction::InsertIndex(create_index.clone()))
+                .expect(&format!(
+                    "Error happen when inserting index in peer {:?}.",
+                    peer.key()
+                ));
+        }
+    }
+
+    fn handle_remove_index(&self, rel_path: &str, remove_path: &str) {
+        let rel_path_str = PathBuf::new()
+            .join(rel_path.trim_start_matches('/'))
+            .join(remove_path.trim_start_matches('/'));
+        let rel_path = rel_path_str.to_string_lossy().to_string();
+        let mut remove_index = Vec::new();
+        remove_index.push(rel_path.clone());
+        (&self.get_file_index()).remove(&rel_path);
+        for peer in self.get_peers().iter() {
+            let p = peer.value();
+            p.submit_and_wait(PeerAction::RemoveIndex(remove_index.clone()))
+                .expect(&format!(
+                    "Error happen when updating index in peer {:?}.",
+                    peer.key()
+                ));
+        }
+    }
+
+    fn handle_update_index(&self, rel_path: &str, src_path: &str, dst_path: &str) {
+        let src_path_str = PathBuf::new()
+            .join(rel_path.trim_start_matches('/'))
+            .join(src_path.trim_start_matches('/'));
+        let dst_path_str = PathBuf::new()
+            .join(rel_path.trim_start_matches('/'))
+            .join(dst_path.trim_start_matches('/'));
+        let src_file_path = src_path_str.to_string_lossy().to_string();
+        let dst_file_path = dst_path_str.to_string_lossy().to_string();
+        let update_index = DashMap::new();
+        update_index.insert(src_file_path.clone(), dst_file_path.clone());
+        (&self.get_file_index()).remove(&src_file_path);
+        (&self.get_file_index()).insert(dst_file_path, self.get_node_id());
+        for peer in self.get_peers().iter() {
+            let p = peer.value();
+            p.submit_and_wait(PeerAction::UpdateIndex(update_index.clone()))
+                .expect(&format!(
+                    "Error happen when updating index in peer {:?}.",
+                    peer.key()
+                ));
+        }
+    }
+
+    fn get_node_id(&self) -> NodeID;
+
+    fn get_peers(&self) -> Arc<DashMap<NodeID, Arc<MessageQueue>>>;
+
+    fn get_file_index(&self) -> Arc<DashMap<String, NodeID>>;
 
     fn get_tcp_stream(&mut self) -> &mut TcpStream;
 

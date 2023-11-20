@@ -28,6 +28,18 @@ pub struct DfsClientConn {
 }
 
 impl DfsServer for DfsClientConn {
+    fn get_node_id(&self) -> NodeID {
+        self.node_id
+    }
+
+    fn get_peers(&self) -> Arc<DashMap<NodeID, Arc<MessageQueue>>> {
+        self.peers.clone()
+    }
+
+    fn get_file_index(&self) -> Arc<DashMap<String, NodeID>> {
+        self.file_index.clone()
+    }
+
     fn get_tcp_stream(&mut self) -> &mut TcpStream {
         &mut self.conn
     }
@@ -204,48 +216,26 @@ impl DfsClientConn {
                         .join(req.relpath.trim_start_matches('/'))
                         .join(create.path.trim_start_matches('/'));
                     let file_path_str = self.get_root_path().join(rel_path_str.clone());
-                    let rel_path = rel_path_str.to_string_lossy().to_string();
                     match File::create(file_path_str) {
                         Ok(_) => {
+                            self.handle_insert_index(req.relpath, create.path);
                             send_ok_to_conn(self.get_tcp_stream(), ());
-                            let create_index = DashMap::new();
-                            create_index.insert(rel_path.clone(), self.node_id);
-                            for peer in self.peers.iter() {
-                                let p = peer.value();
-                                p.submit_and_wait(PeerAction::InsertIndex(create_index.clone()))
-                                    .expect(&format!(
-                                        "Error happen when inserting index in peer {:?}.",
-                                        peer.key()
-                                    ));
-                            }
                         }
                         Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
                     }
                 }
                 Action::Remove(remove) => {
-                    let rel_path_str = PathBuf::new()
+                    let file_path_str = self
+                        .get_root_path()
                         .join(req.relpath.trim_start_matches('/'))
                         .join(remove.path.trim_start_matches('/'));
-                    let file_path_str = self.get_root_path().join(rel_path_str.clone());
                     let file_path_str = file_path_str.to_string_lossy();
                     let file_node = self.get_node_of_file(&file_path_str);
-                    let rel_path = rel_path_str.to_string_lossy().to_string();
                     match file_node {
                         Some(node_id) => {
                             if node_id == self.node_id {
                                 self.handle_remove(req.relpath, remove.path);
-                                let mut remove_index = Vec::new();
-                                remove_index.push(rel_path.clone());
-                                for peer in self.peers.iter() {
-                                    let p = peer.value();
-                                    p.submit_and_wait(PeerAction::RemoveIndex(
-                                        remove_index.clone(),
-                                    ))
-                                    .expect(&format!(
-                                        "Error happen when updating index in peer {:?}.",
-                                        peer.key()
-                                    ));
-                                }
+                                self.handle_remove_index(req.relpath, remove.path);
                             } else {
                                 let res = self.switch_to_peer(
                                     &node_id,
@@ -287,29 +277,17 @@ impl DfsClientConn {
                     let src_path_str = PathBuf::new()
                         .join(req.relpath.trim_start_matches('/'))
                         .join(rename.src_path.trim_start_matches('/'));
-                    let dst_path_str = PathBuf::new()
-                        .join(req.relpath.trim_start_matches('/'))
-                        .join(rename.dst_path.trim_start_matches('/'));
                     let src_path_str = src_path_str.to_string_lossy();
                     let file_node = self.get_node_of_file(&src_path_str);
-                    let src_file_path = src_path_str.to_string();
-                    let dst_file_path = dst_path_str.to_string_lossy().to_string();
                     match file_node {
                         Some(node_id) => {
                             if node_id == self.node_id {
                                 self.handle_rename(req.relpath, rename.src_path, rename.dst_path);
-                                let update_index = DashMap::new();
-                                update_index.insert(src_file_path, dst_file_path);
-                                for peer in self.peers.iter() {
-                                    let p = peer.value();
-                                    p.submit_and_wait(PeerAction::UpdateIndex(
-                                        update_index.clone(),
-                                    ))
-                                    .expect(&format!(
-                                        "Error happen when updating index in peer {:?}.",
-                                        peer.key()
-                                    ));
-                                }
+                                self.handle_update_index(
+                                    req.relpath,
+                                    rename.src_path,
+                                    rename.dst_path,
+                                );
                             } else {
                                 let res = self.switch_to_peer(
                                     &node_id,
