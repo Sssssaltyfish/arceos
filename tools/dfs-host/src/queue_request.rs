@@ -45,15 +45,11 @@ impl MessageQueue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IndexMap {
-    pub index: DashMap<String, NodeID>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PeerAction {
     SerializedAction(Vec<u8>),
-    UpdateIndex(IndexMap),
+    InsertIndex(DashMap<String, NodeID>),
     RemoveIndex(Vec<String>),
+    UpdateIndex(DashMap<String, String>),
 }
 
 // directly forward serialized content to simplify everything

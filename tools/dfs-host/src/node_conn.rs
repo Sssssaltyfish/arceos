@@ -1,14 +1,15 @@
-use std::fs::File;
 use std::net::TcpStream;
 use std::sync::Arc;
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use axfs::distfs::BINCODE_CONFIG;
 use dashmap::DashMap;
 
 use crate::conn_utils::{
-    deserialize_client_request_from_buff, deserialize_node_request_from_buff, read_data_from_conn,
-    DfsServer,
+    deserialize_client_request_from_buff, deserialize_node_request_from_buff,
+    deserialize_response_from_buff, read_data_from_conn, DfsServer,
+    Tcpio,
 };
 use crate::host::NodeID;
 use crate::queue_request::{MessageQueue, PeerAction};
@@ -34,7 +35,25 @@ impl DfsNodeOutConn {
         }
     }
 
-    pub fn handle_conn(&mut self) {}
+    pub fn handle_conn(&mut self) {
+        loop {
+            self.message_queue.pop_to_work(|action| {
+                bincode::serde::encode_into_writer(
+                    action.clone(),
+                    Tcpio(&mut self.conn),
+                    BINCODE_CONFIG,
+                )
+                .expect(&format!(
+                    "Error happen when writing back success response from connection: {:?}",
+                    self.conn
+                ));
+                let mut buff = vec![0u8; 1024];
+                let bytes_read = read_data_from_conn(&mut buff, &mut self.conn);
+                let res = deserialize_response_from_buff(&buff, bytes_read);
+                res
+            })
+        }
+    }
 }
 
 impl DfsServer for DfsNodeInConn {
@@ -97,20 +116,35 @@ impl DfsNodeInConn {
                         }
                     }
                 }
-                PeerAction::UpdateIndex(update_index) => {
-                    self.handle_update_index(update_index.index)
-                }
+                PeerAction::InsertIndex(insert_index) => self.handle_insert_index(insert_index),
                 PeerAction::RemoveIndex(remove_index) => self.handle_remove_index(remove_index),
+                PeerAction::UpdateIndex(update_index) => self.handle_update_index(update_index),
             }
         }
     }
 
-    fn handle_update_index(&self, index_map: DashMap<String, NodeID>) {
+    fn handle_update_index(&self, index_map: DashMap<String, String>) {
+        let file_index = &self.file_index;
+        for entry in index_map.iter() {
+            let node_id = file_index
+                .remove(entry.key())
+                .ok_or_else(|| {
+                    logger::error!(
+                        "Unachieable circumstance: key doesn't exist in file index when updating!"
+                    );
+                })
+                .unwrap()
+                .1;
+            file_index.insert(entry.value().clone(), node_id);
+        }
+    }
+
+    fn handle_insert_index(&self, index_map: DashMap<String, NodeID>) {
         let file_index = &self.file_index;
         for entry in index_map.iter() {
             if file_index.contains_key(entry.key()) {
                 logger::error!(
-                    "Unachieable circumstance: key already exist in file index when updating!"
+                    "Unachieable circumstance: key already exist in file index when inserting!"
                 )
             }
             file_index.insert(entry.key().clone(), *entry.value());

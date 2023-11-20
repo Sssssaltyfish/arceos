@@ -76,6 +76,18 @@ pub fn deserialize_node_request_from_buff(
     req
 }
 
+pub fn deserialize_response_from_buff(buff: &[u8], bytes_read: usize) -> ReturnTypeYouNeed {
+    let (req, _) = bincode::serde::decode_from_slice::<ReturnTypeYouNeed, _>(
+        &buff[..bytes_read],
+        BINCODE_CONFIG,
+    )
+    .map_err(|e| {
+        logger::error!("Error deserializing peer response from connection: {}", e);
+    })
+    .unwrap();
+    req
+}
+
 pub fn send_ok_to_conn<T: Encode>(conn: &mut TcpStream, con: T) {
     let res = Response::Ok(con);
     bincode::encode_into_writer(&res, Tcpio(conn), BINCODE_CONFIG).expect(&format!(

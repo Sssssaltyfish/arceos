@@ -1,18 +1,15 @@
-use std::io::Write;
+use std::fs::File;
 use std::net::TcpStream;
 use std::sync::Arc;
 
 #[cfg(not(feature = "axstd"))]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::vec::Vec;
+use alloc::{string::String, vec};
 
 use axfs::distfs::request::Action;
 
-use bincode::enc::write::Writer;
 use dashmap::DashMap;
 
 use crate::utils::*;
@@ -189,20 +186,13 @@ impl DfsClientConn {
                     }
                 }
                 Action::Lookup(lookup) => {
-                    let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
-                    let file_node = self.get_node_of_file(file_path_str);
+                    let file_path_str = PathBuf::new()
+                        .join(req.relpath.trim_start_matches('/'))
+                        .join(lookup.path.trim_start_matches('/'));
+                    let file_path_str = file_path_str.to_string_lossy();
+                    let file_node = self.get_node_of_file(&file_path_str);
                     match file_node {
-                        Some(node_id) => {
-                            if node_id == self.node_id {
-                                self.handle_lookup(req.relpath, lookup.path);
-                            } else {
-                                let res = self.switch_to_peer(
-                                    &node_id,
-                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
-                                );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
-                            }
-                        }
+                        Some(_) => send_ok_to_conn(self.get_tcp_stream(), file_path_str),
                         None => send_err_to_conn(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
@@ -210,33 +200,52 @@ impl DfsClientConn {
                     }
                 }
                 Action::Create(create) => {
-                    let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
-                    let file_node = self.get_node_of_file(file_path_str);
-                    match file_node {
-                        Some(node_id) => {
-                            if node_id == self.node_id {
-                                self.handle_create(req.relpath, create.path);
-                            } else {
-                                let res = self.switch_to_peer(
-                                    &node_id,
-                                    PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
-                                );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                    let rel_path_str = PathBuf::new()
+                        .join(req.relpath.trim_start_matches('/'))
+                        .join(create.path.trim_start_matches('/'));
+                    let file_path_str = self.get_root_path().join(rel_path_str.clone());
+                    let rel_path = rel_path_str.to_string_lossy().to_string();
+                    match File::create(file_path_str) {
+                        Ok(_) => {
+                            send_ok_to_conn(self.get_tcp_stream(), ());
+                            let create_index = DashMap::new();
+                            create_index.insert(rel_path.clone(), self.node_id);
+                            for peer in self.peers.iter() {
+                                let p = peer.value();
+                                p.submit_and_wait(PeerAction::InsertIndex(create_index.clone()))
+                                    .expect(&format!(
+                                        "Error happen when inserting index in peer {:?}.",
+                                        peer.key()
+                                    ));
                             }
                         }
-                        None => send_err_to_conn(
-                            self.get_tcp_stream(),
-                            io_err_to_axerr(io::ErrorKind::NotFound.into()),
-                        ),
+                        Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
                     }
                 }
                 Action::Remove(remove) => {
-                    let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
-                    let file_node = self.get_node_of_file(file_path_str);
+                    let rel_path_str = PathBuf::new()
+                        .join(req.relpath.trim_start_matches('/'))
+                        .join(remove.path.trim_start_matches('/'));
+                    let file_path_str = self.get_root_path().join(rel_path_str.clone());
+                    let file_path_str = file_path_str.to_string_lossy();
+                    let file_node = self.get_node_of_file(&file_path_str);
+                    let rel_path = rel_path_str.to_string_lossy().to_string();
                     match file_node {
                         Some(node_id) => {
                             if node_id == self.node_id {
                                 self.handle_remove(req.relpath, remove.path);
+                                let mut remove_index = Vec::new();
+                                remove_index.push(rel_path.clone());
+                                for peer in self.peers.iter() {
+                                    let p = peer.value();
+                                    p.submit_and_wait(PeerAction::RemoveIndex(
+                                        remove_index.clone(),
+                                    ))
+                                    .expect(&format!(
+                                        "Error happen when updating index in peer {:?}.",
+                                        peer.key()
+                                    ));
+                                }
                             } else {
                                 let res = self.switch_to_peer(
                                     &node_id,
@@ -252,6 +261,8 @@ impl DfsClientConn {
                     }
                 }
                 Action::ReadDir(readdir) => {
+                    // readdir logic needs update here
+                    // todo!()
                     let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
                     let file_node = self.get_node_of_file(file_path_str);
                     match file_node {
@@ -273,12 +284,32 @@ impl DfsClientConn {
                     }
                 }
                 Action::Rename(rename) => {
-                    let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
-                    let file_node = self.get_node_of_file(file_path_str);
+                    let src_path_str = PathBuf::new()
+                        .join(req.relpath.trim_start_matches('/'))
+                        .join(rename.src_path.trim_start_matches('/'));
+                    let dst_path_str = PathBuf::new()
+                        .join(req.relpath.trim_start_matches('/'))
+                        .join(rename.dst_path.trim_start_matches('/'));
+                    let src_path_str = src_path_str.to_string_lossy();
+                    let file_node = self.get_node_of_file(&src_path_str);
+                    let src_file_path = src_path_str.to_string();
+                    let dst_file_path = dst_path_str.to_string_lossy().to_string();
                     match file_node {
                         Some(node_id) => {
                             if node_id == self.node_id {
-                                self.handle_rename(req.relpath, rename.src_path, rename.dst_path)
+                                self.handle_rename(req.relpath, rename.src_path, rename.dst_path);
+                                let update_index = DashMap::new();
+                                update_index.insert(src_file_path, dst_file_path);
+                                for peer in self.peers.iter() {
+                                    let p = peer.value();
+                                    p.submit_and_wait(PeerAction::UpdateIndex(
+                                        update_index.clone(),
+                                    ))
+                                    .expect(&format!(
+                                        "Error happen when updating index in peer {:?}.",
+                                        peer.key()
+                                    ));
+                                }
                             } else {
                                 let res = self.switch_to_peer(
                                     &node_id,
