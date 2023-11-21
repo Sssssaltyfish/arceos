@@ -34,7 +34,7 @@ qemu_args-$(NET) += \
   -device virtio-net-$(vdev-suffix),netdev=net0
 
 ifeq ($(NET_DEV), user)
-  qemu_args-$(NET) += -netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
+  qemu_args-$(NET) += -netdev user,id=net0,hostfwd=tcp::$(NET_PORT)-:$(NET_PORT),hostfwd=udp::$(NET_PORT)-:$(NET_PORT)
 else ifeq ($(NET_DEV), tap)
   qemu_args-$(NET) += -netdev tap,id=net0,ifname=tap0,script=no,downscript=no
 else

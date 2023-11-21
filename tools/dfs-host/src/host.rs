@@ -1,14 +1,16 @@
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
-use std::thread;
+use std::{fs, thread};
 
 use alloc::{format, string::String};
 
+use axfs::distfs::BINCODE_CONFIG;
 use dashmap::DashMap;
 
 use crate::client_conn::DfsClientConn;
 use crate::node_conn::{DfsNodeInConn, DfsNodeOutConn};
-use crate::queue_request::MessageQueue;
+use crate::queue_request::{MessageQueue, PeerAction};
 use crate::utils::PathBuf;
 
 #[cfg(feature = "axstd")]
@@ -29,6 +31,7 @@ pub struct DfsHost {
 
 impl DfsHost {
     pub fn new(node_id: NodeID, root_path: PathBuf) -> Self {
+        fs::create_dir(&root_path).unwrap_or_else(|_| {});
         DfsHost {
             node_id,
             root_path,
@@ -94,7 +97,24 @@ impl DfsHost {
                             thread::spawn({
                                 move || {
                                     if node_id_ref == 0 {
-                                        out_conn.send_init_index(init_file_index_ref.clone());
+                                        let init_index = DashMap::new();
+                                        for entry in init_file_index_ref.iter() {
+                                            init_index.insert(entry.key().clone(), *entry.value());
+                                        }
+                                        let init_action = PeerAction::InitIndex(init_index);
+                                        let action_vec = bincode::serde::encode_to_vec(
+                                            &init_action,
+                                            BINCODE_CONFIG,
+                                        )
+                                        .expect("Error happen when serializing peer action.");
+                                        out_conn.get_tcp_stream().write_all(&action_vec).expect(
+                                            "Error happen when sending serialized peer action.",
+                                        );
+                                        let mut buff = vec![0u8; 10];
+                                        let _ = out_conn
+                                            .get_tcp_stream()
+                                            .read(&mut buff)
+                                            .expect("Error when initializing file index.");
                                     }
                                     out_conn.handle_conn();
                                 }

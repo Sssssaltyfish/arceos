@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::TcpStream;
@@ -17,6 +18,7 @@ use axerrno::AxError;
 use axfs::distfs::request::{DirEntry, NodeAttr, Request, Response};
 use axfs::distfs::BINCODE_CONFIG;
 
+use bincode::de::read::Reader;
 use bincode::enc::write::Writer;
 use bincode::Encode;
 use dashmap::DashMap;
@@ -24,13 +26,26 @@ use dashmap::DashMap;
 use crate::host::NodeID;
 use crate::utils::{unix_ty_to_axty, Path, PathBuf};
 
-use crate::queue_request::{self, MessageQueue, PeerAction, ReturnTypeYouNeed};
+use crate::queue_request::{
+    self, MessageQueue, PeerAction, ResponseFromPeer, SerializedResponseContent,
+};
 #[cfg(feature = "axstd")]
 use crate::utils::*;
 
 use crate::utils::io_err_to_axerr;
 
 pub(super) struct Tcpio<'a>(pub &'a mut TcpStream);
+
+pub const END_SERIAL: [u8; 4] = [0, 0, 0, 0];
+
+impl Reader for Tcpio<'_> {
+    fn read(&mut self, bytes: &mut [u8]) -> Result<(), bincode::error::DecodeError> {
+        self.0.read(bytes).map_err(|err| {
+            bincode::error::DecodeError::OtherString(format!("tcp recv error: {}", err))
+        })?;
+        Ok(())
+    }
+}
 
 impl Writer for Tcpio<'_> {
     fn write(&mut self, bytes: &[u8]) -> core::result::Result<(), bincode::error::EncodeError> {
@@ -45,7 +60,7 @@ pub fn read_data_from_conn(buff: &mut [u8], conn: &mut TcpStream) -> usize {
         .read(buff)
         .map_err(|e| {
             logger::error!("Error reading bytes from connection: {:?}", conn);
-            send_err_to_conn(conn, io_err_to_axerr(e))
+            send_err_to_conn_serialized(conn, io_err_to_axerr(e))
         })
         .unwrap();
     bytes_read
@@ -79,8 +94,8 @@ pub fn deserialize_node_request_from_buff(
     req
 }
 
-pub fn deserialize_response_from_buff(buff: &[u8], bytes_read: usize) -> ReturnTypeYouNeed {
-    let (req, _) = bincode::serde::decode_from_slice::<ReturnTypeYouNeed, _>(
+pub fn deserialize_response_from_buff(buff: &[u8], bytes_read: usize) -> ResponseFromPeer {
+    let (req, _) = bincode::serde::decode_from_slice::<ResponseFromPeer, _>(
         &buff[..bytes_read],
         BINCODE_CONFIG,
     )
@@ -91,27 +106,36 @@ pub fn deserialize_response_from_buff(buff: &[u8], bytes_read: usize) -> ReturnT
     req
 }
 
-pub fn send_ok_to_conn<T: Encode>(conn: &mut TcpStream, con: T) {
+pub fn send_ok_to_conn_serialized<T: Encode + Debug + Clone>(conn: &mut TcpStream, con: T) {
     let res = Response::Ok(con);
-    bincode::encode_into_writer(&res, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
+    logger::debug!("Sending response back {:?}", res.clone());
+    let res = bincode::encode_to_vec(res, BINCODE_CONFIG).unwrap();
+    conn.write_all(&res).expect(&format!(
         "Error happen when writing back success response from connection: {:?}",
+        conn
+    ));
+}
+
+pub fn send_err_to_conn_serialized(conn: &mut TcpStream, e: AxError) {
+    let res_err: Response<String> = Response::Err(e.code());
+    let res_err = bincode::encode_to_vec(res_err, BINCODE_CONFIG).unwrap();
+    conn.write_all(&res_err).expect(&format!(
+        "Error happen when writing back error response from connection: {:?}",
         conn
     ))
 }
 
-pub fn send_err_to_conn(conn: &mut TcpStream, e: AxError) {
-    let res_err: Response<String> = Response::Err(e.code());
-    bincode::encode_into_writer(&res_err, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
-        "Error happen when writing back error response from connection: {:?}",
+pub fn send_vec_to_conn(conn: &mut TcpStream, con: SerializedResponseContent) {
+    conn.write_all(&con).expect(&format!(
+        "Error happen when writing peer response from connection: {:?}",
         conn
-    ));
+    ))
 }
 
-pub fn send_serialized_data_to_conn(conn: &mut TcpStream, res: ReturnTypeYouNeed) {
-    bincode::encode_into_writer(&res, Tcpio(conn), BINCODE_CONFIG).expect(&format!(
-        "Error happen when writing back serialized response from connection: {:?}",
-        conn
-    ));
+pub fn send_peer_response_to_client(conn: &mut TcpStream, con_vec: ResponseFromPeer) {
+    for con in con_vec {
+        send_vec_to_conn(conn, con);
+    }
 }
 
 pub trait DfsServer {
@@ -119,8 +143,8 @@ pub trait DfsServer {
         let modified_str = open_path.trim_start_matches(|c| c == '/');
         let file_path = self.get_root_path().join(modified_str);
         match File::open(&file_path) {
-            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Ok(_) => send_ok_to_conn_serialized(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         };
     }
 
@@ -134,22 +158,24 @@ pub trait DfsServer {
                 // Seek to the specified offset
                 // Read data into a buffer of the specified length
                 f.seek(SeekFrom::Start(offset))
-                    .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)))
+                    .map_err(|e| send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)))
                     .and_then(|_| {
                         let size = f
                             .read(&mut buffer)
-                            .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e))).unwrap();
-                        send_ok_to_conn(self.get_tcp_stream(), size as u64);
+                            .map_err(|e| send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e))).unwrap();
+                        send_ok_to_conn_serialized(self.get_tcp_stream(), size as u64);
+                        self.get_tcp_stream().flush().unwrap();
                         self.get_tcp_stream().write_all(&buffer[..size]).expect(
                             &format!(
                                 "Error happen when writing back read content response from connection: {:?}",
                                 self.get_tcp_stream()
                             ),
                         );
+                        self.get_tcp_stream().flush().unwrap();
                         Ok(())
                     }).unwrap();
             }
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         };
     }
 
@@ -162,19 +188,24 @@ pub trait DfsServer {
                 // Seek to the specified offset
                 // Write data into file of the specified length
                 f.seek(SeekFrom::Start(offset))
-                    .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)))
+                    .map_err(|e| {
+                        send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e))
+                    })
                     .and_then(|_| {
                         f.write_all(content)
                             .map_err(|e| {
-                                send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e))
+                                send_err_to_conn_serialized(
+                                    self.get_tcp_stream(),
+                                    io_err_to_axerr(e),
+                                )
                             })
                             .unwrap();
-                        send_ok_to_conn(self.get_tcp_stream(), content.len() as u64);
+                        send_ok_to_conn_serialized(self.get_tcp_stream(), content.len() as u64);
                         Ok(())
                     })
                     .unwrap();
             }
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         }
     }
 
@@ -189,9 +220,9 @@ pub trait DfsServer {
                     .join(lookup_path.trim_start_matches('/'))
                     .to_string_lossy()
                     .to_string();
-                send_ok_to_conn(self.get_tcp_stream(), res);
+                send_ok_to_conn_serialized(self.get_tcp_stream(), res);
             }
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         };
     }
 
@@ -201,8 +232,8 @@ pub trait DfsServer {
                 .join(rel_path.trim_start_matches('/'))
                 .join(create_path.trim_start_matches('/')),
         ) {
-            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Ok(_) => send_ok_to_conn_serialized(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         }
     }
 
@@ -211,16 +242,18 @@ pub trait DfsServer {
         match OpenOptions::new().write(true).open(file_path) {
             Ok(f) => {
                 f.set_len(size)
-                    .map_err(|e| send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)))
+                    .map_err(|e| {
+                        send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e))
+                    })
                     .unwrap();
-                send_ok_to_conn(self.get_tcp_stream(), ());
+                send_ok_to_conn_serialized(self.get_tcp_stream(), ());
             }
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         }
     }
 
     fn handle_release(&mut self) {
-        send_ok_to_conn(self.get_tcp_stream(), ());
+        send_ok_to_conn_serialized(self.get_tcp_stream(), ());
     }
 
     fn handle_getattr(&mut self, rel_path: &str) {
@@ -238,9 +271,9 @@ pub trait DfsServer {
                     size,
                     blocks,
                 };
-                send_ok_to_conn(self.get_tcp_stream(), attr);
+                send_ok_to_conn_serialized(self.get_tcp_stream(), attr);
             }
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         }
     }
 
@@ -254,8 +287,8 @@ pub trait DfsServer {
             .join(rel_path.trim_start_matches('/'))
             .join(dst_path.trim_start_matches('/'));
         match fs::rename(src, dst) {
-            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Ok(_) => send_ok_to_conn_serialized(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         }
     }
 
@@ -265,8 +298,8 @@ pub trait DfsServer {
             .join(rel_path.trim_start_matches('/'))
             .join(remove_path.trim_start_matches('/'));
         match fs::remove_file(path) {
-            Ok(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
-            Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+            Ok(_) => send_ok_to_conn_serialized(self.get_tcp_stream(), ()),
+            Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
         }
     }
 
@@ -274,7 +307,7 @@ pub trait DfsServer {
         let base_path = self.get_root_path().join(rel_path.trim_start_matches('/'));
         let entities = fs::read_dir(&base_path).unwrap().skip(start_index as _);
         let entities_col: Vec<_> = entities.collect();
-        send_ok_to_conn(self.get_tcp_stream(), entities_col.len());
+        send_ok_to_conn_serialized(self.get_tcp_stream(), entities_col.len());
         for entry in entities_col {
             match entry {
                 Ok(e) => {
@@ -292,7 +325,7 @@ pub trait DfsServer {
                         unreachable!()
                     }
                 }
-                Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+                Err(e) => send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e)),
             }
         }
     }
@@ -303,11 +336,11 @@ pub trait DfsServer {
             .unwrap()
             .to_string_lossy()
             .to_string();
-        send_ok_to_conn(self.get_tcp_stream(), parent_path);
+        send_ok_to_conn_serialized(self.get_tcp_stream(), parent_path);
     }
 
     fn handle_fsync(&mut self) {
-        send_ok_to_conn(self.get_tcp_stream(), ());
+        send_ok_to_conn_serialized(self.get_tcp_stream(), ());
     }
 
     fn handle_insert_index(&self, rel_path: &str, create_path: &str) {
@@ -320,11 +353,7 @@ pub trait DfsServer {
         (&self.get_file_index()).insert(rel_path, self.get_node_id());
         for peer in self.get_peers().iter() {
             let p = peer.value();
-            p.submit_and_wait(PeerAction::InsertIndex(create_index.clone()))
-                .expect(&format!(
-                    "Error happen when inserting index in peer {:?}.",
-                    peer.key()
-                ));
+            p.submit_and_wait(PeerAction::InsertIndex(create_index.clone()));
         }
     }
 
@@ -338,11 +367,7 @@ pub trait DfsServer {
         (&self.get_file_index()).remove(&rel_path);
         for peer in self.get_peers().iter() {
             let p = peer.value();
-            p.submit_and_wait(PeerAction::RemoveIndex(remove_index.clone()))
-                .expect(&format!(
-                    "Error happen when updating index in peer {:?}.",
-                    peer.key()
-                ));
+            p.submit_and_wait(PeerAction::RemoveIndex(remove_index.clone()));
         }
     }
 
@@ -361,11 +386,7 @@ pub trait DfsServer {
         (&self.get_file_index()).insert(dst_file_path, self.get_node_id());
         for peer in self.get_peers().iter() {
             let p = peer.value();
-            p.submit_and_wait(PeerAction::UpdateIndex(update_index.clone()))
-                .expect(&format!(
-                    "Error happen when updating index in peer {:?}.",
-                    peer.key()
-                ));
+            p.submit_and_wait(PeerAction::UpdateIndex(update_index.clone()));
         }
     }
 

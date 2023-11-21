@@ -18,11 +18,14 @@ fn main() {
     use std::env;
 
     env_logger::builder()
-        .filter_level(logger::LevelFilter::Debug)
+        .filter_level(logger::LevelFilter::Info)
         .init();
     let args: Vec<String> = env::args().collect();
     let node_id: u32 = args[1].parse().unwrap();
-    let mut host = DfsHost::new(node_id, env::current_dir().unwrap());
+    let mut host = DfsHost::new(
+        node_id,
+        env::current_dir().unwrap().join(node_id.to_string()),
+    );
     let _ = host.start_listening();
 }
 

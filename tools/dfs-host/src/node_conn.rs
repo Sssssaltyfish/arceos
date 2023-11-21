@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::net::TcpStream;
 use std::sync::Arc;
 
@@ -7,13 +8,22 @@ use axfs::distfs::BINCODE_CONFIG;
 use dashmap::DashMap;
 
 use crate::conn_utils::{
-    deserialize_client_request_from_buff, deserialize_node_request_from_buff,
-    deserialize_response_from_buff, read_data_from_conn, DfsServer, Tcpio, send_ok_to_conn,
+    deserialize_client_request_from_buff, deserialize_node_request_from_buff, read_data_from_conn,
+    send_ok_to_conn_serialized, send_vec_to_conn, DfsServer, Tcpio, END_SERIAL,
 };
 use crate::host::NodeID;
-use crate::queue_request::{MessageQueue, PeerAction};
+use crate::queue_request::{MessageQueue, PeerAction, ResponseFromPeer};
 use crate::utils::*;
-use axfs::distfs::request::Action;
+use axfs::distfs::request::{Action, Response};
+
+pub fn contains_end_sequence(slice: &[u8]) -> Option<usize> {
+    for i in 0..slice.len() {
+        if i + 3 < slice.len() && slice[i..i + 4] == END_SERIAL {
+            return Some(i);
+        }
+    }
+    None
+}
 
 pub struct DfsNodeOutConn {
     conn: TcpStream,
@@ -36,22 +46,34 @@ impl DfsNodeOutConn {
         }
     }
 
+    pub fn get_tcp_stream(&mut self) -> &mut TcpStream {
+        &mut self.conn
+    }
+
     pub fn handle_conn(&mut self) {
         loop {
             self.message_queue.pop_to_work(|action| {
-                bincode::serde::encode_into_writer(
-                    action.clone(),
-                    Tcpio(&mut self.conn),
-                    BINCODE_CONFIG,
-                )
-                .expect(&format!(
-                    "Error happen when writing back success response from connection: {:?}",
-                    self.conn
-                ));
+                let action_vec = bincode::serde::encode_to_vec(action, BINCODE_CONFIG)
+                    .expect("Error happen when serializing peer action.");
+                self.conn
+                    .write_all(&action_vec)
+                    .expect("Error happen when sending serialized peer action.");
+                let mut res_buff: Vec<Vec<u8>> = Vec::new();
                 let mut buff = vec![0u8; 1024];
-                let bytes_read = read_data_from_conn(&mut buff, &mut self.conn);
-                let res = deserialize_response_from_buff(&buff, bytes_read);
-                res
+                loop {
+                    let bytes_read = read_data_from_conn(&mut buff, &mut self.conn);
+                    logger::debug!("Recieved {} bytes of data", bytes_read);
+                    match contains_end_sequence(&buff[..bytes_read]) {
+                        Some(i) => {
+                            if i != 0 {
+                                res_buff.push(buff[..i].to_vec());
+                            }
+                            break;
+                        }
+                        None => res_buff.push(buff[..bytes_read].to_vec()),
+                    }
+                }
+                res_buff
             })
         }
     }
@@ -61,7 +83,9 @@ impl DfsNodeOutConn {
         for entry in file_index.iter() {
             init_index.insert(entry.key().clone(), *entry.value());
         }
-        let _ = self.message_queue.submit_and_wait(PeerAction::InitIndex(init_index));
+        let _ = self
+            .message_queue
+            .submit_and_wait(PeerAction::InitIndex(init_index));
     }
 }
 
@@ -117,6 +141,7 @@ impl DfsNodeInConn {
             match req {
                 PeerAction::SerializedAction(action) => {
                     let req = deserialize_client_request_from_buff(&action, action.len());
+                    logger::debug!("Recieved file op from peer request: {:?}", req);
                     match req.action {
                         Action::Open => self.handle_open(req.relpath),
                         Action::Release => self.handle_release(),
@@ -151,21 +176,23 @@ impl DfsNodeInConn {
                 }
                 PeerAction::InsertIndex(insert_index) => {
                     self.handle_outer_insert_index(insert_index);
-                    send_ok_to_conn(&mut self.conn, ());
+                    send_ok_to_conn_serialized(&mut self.conn, ());
                 }
                 PeerAction::RemoveIndex(remove_index) => {
                     self.handle_outer_remove_index(remove_index);
-                    send_ok_to_conn(&mut self.conn, ());
+                    send_ok_to_conn_serialized(&mut self.conn, ());
                 }
                 PeerAction::UpdateIndex(update_index) => {
                     self.handle_outer_update_index(update_index);
-                    send_ok_to_conn(&mut self.conn, ());
+                    send_ok_to_conn_serialized(&mut self.conn, ());
                 }
                 PeerAction::InitIndex(init_index) => {
                     self.handle_outer_init_index(init_index);
-                    send_ok_to_conn(&mut self.conn, ());
+                    send_ok_to_conn_serialized(&mut self.conn, ());
                 }
             }
+            send_vec_to_conn(self.get_tcp_stream(), END_SERIAL.to_vec());
+            logger::debug!("End serial sent succeed.")
         }
     }
 

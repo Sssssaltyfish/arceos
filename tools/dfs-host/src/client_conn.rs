@@ -8,7 +8,8 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use alloc::vec::Vec;
 use alloc::{string::String, vec};
 
-use axfs::distfs::request::Action;
+use axfs::distfs::request::{Action, NodeAttr, Response};
+use axfs::distfs::BINCODE_CONFIG;
 
 use dashmap::DashMap;
 
@@ -16,7 +17,7 @@ use crate::utils::*;
 
 use crate::conn_utils::*;
 use crate::host::NodeID;
-use crate::queue_request::{MessageQueue, PeerAction, ReturnTypeYouNeed};
+use crate::queue_request::{MessageQueue, PeerAction, ResponseFromPeer};
 use crate::utils::PathBuf;
 
 pub struct DfsClientConn {
@@ -67,7 +68,7 @@ impl DfsClientConn {
     }
 
     pub fn handle_conn(&mut self) {
-        // mount 127.0.0.1:8000 /dist distfs
+        // mount 127.0.0.1:9000 /dist distfs
         // Continuously read data from the TcpStream and store it in the buff.
         loop {
             let mut buff = vec![0u8; 1024];
@@ -83,8 +84,8 @@ impl DfsClientConn {
                     let file_path_str = req.relpath.trim_start_matches(|c| c == '/');
                     let file_node = self.get_node_of_file(file_path_str);
                     match file_node {
-                        Some(_) => send_ok_to_conn(self.get_tcp_stream(), ()),
-                        None => send_err_to_conn(
+                        Some(_) => send_ok_to_conn_serialized(self.get_tcp_stream(), ()),
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -103,10 +104,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -124,10 +125,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -145,10 +146,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -167,10 +168,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -188,10 +189,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -204,8 +205,8 @@ impl DfsClientConn {
                     let file_path_str = file_path_str.to_string_lossy();
                     let file_node = self.get_node_of_file(&file_path_str);
                     match file_node {
-                        Some(_) => send_ok_to_conn(self.get_tcp_stream(), file_path_str),
-                        None => send_err_to_conn(
+                        Some(_) => send_ok_to_conn_serialized(self.get_tcp_stream(), file_path_str),
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -219,9 +220,11 @@ impl DfsClientConn {
                     match File::create(file_path_str) {
                         Ok(_) => {
                             self.handle_insert_index(req.relpath, create.path);
-                            send_ok_to_conn(self.get_tcp_stream(), ());
+                            send_ok_to_conn_serialized(self.get_tcp_stream(), ());
                         }
-                        Err(e) => send_err_to_conn(self.get_tcp_stream(), io_err_to_axerr(e)),
+                        Err(e) => {
+                            send_err_to_conn_serialized(self.get_tcp_stream(), io_err_to_axerr(e))
+                        }
                     }
                 }
                 Action::Remove(remove) => {
@@ -241,10 +244,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -264,10 +267,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -293,10 +296,10 @@ impl DfsClientConn {
                                     &node_id,
                                     PeerAction::SerializedAction(buff[..bytes_read].to_vec()),
                                 );
-                                send_serialized_data_to_conn(self.get_tcp_stream(), res);
+                                send_peer_response_to_client(self.get_tcp_stream(), res);
                             }
                         }
-                        None => send_err_to_conn(
+                        None => send_err_to_conn_serialized(
                             self.get_tcp_stream(),
                             io_err_to_axerr(io::ErrorKind::NotFound.into()),
                         ),
@@ -311,7 +314,7 @@ impl DfsClientConn {
         // Return the total number of bytes read.
     }
 
-    fn switch_to_peer(&mut self, node_id: &NodeID, action: PeerAction) -> ReturnTypeYouNeed {
+    fn switch_to_peer(&mut self, node_id: &NodeID, action: PeerAction) -> ResponseFromPeer {
         let peer_worker = self
             .peers
             .get(node_id)

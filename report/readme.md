@@ -53,3 +53,17 @@ pub struct DfsNodeOutConn {
 - 创建文件：往文件树索引中插入索引条目，同时通知其他所有服务器；
 - 删除文件：删除文件树索引中索引条目，同时通知其他所有服务器；
 - 重命名文件：更新文件树索引，同时通知其他所有服务器；
+
+## 运行方法
+
+- 运行服务器：/tools/dfs-host下
+
+``` shell
+cargo run -- 0(从0开始动态接入)
+```
+
+- 运行ArceOS：根目录下
+
+``` shell
+make run APP=apps/fs/shell FEATURES=alloc,paging,fs,net,multitask BLK=y NET=y LOG=debug ARCH=riscv64 NET_PORT=(填入预期运行的端口号)
+```

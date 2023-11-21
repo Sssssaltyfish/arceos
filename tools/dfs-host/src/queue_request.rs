@@ -17,17 +17,19 @@ impl MessageQueue {
     }
 
     // call on producer
-    pub fn submit_and_wait(&self, action: PeerAction) -> ReturnTypeYouNeed {
+    pub fn submit_and_wait(&self, action: PeerAction) -> ResponseFromPeer {
         let fut = Arc::new(RequestFuture::new(action));
         self.0.push(fut.clone());
         fut.wait_till_complete()
     }
 
     // call on consumer
-    pub fn pop_to_work(&self, work: impl FnOnce(&PeerAction) -> ReturnTypeYouNeed) {
+    pub fn pop_to_work(&self, work: impl FnOnce(&PeerAction) -> ResponseFromPeer) {
         let fut = self.wait_on_queue();
+        logger::debug!("Recieved new peer request to send: {:?}", fut.action);
         let mut data = fut.waiter.lock().unwrap();
         let ret = work(&fut.action);
+        logger::debug!("Recieved response for peer request {:?}", ret.clone());
         *data = Some(ret);
 
         std::sync::atomic::compiler_fence(Ordering::Acquire);
@@ -56,11 +58,11 @@ pub enum PeerAction {
 // directly forward serialized content to simplify everything
 pub type SerializedResponseContent = Vec<u8>;
 // give it a better name later
-pub type ReturnTypeYouNeed = Response<SerializedResponseContent>;
+pub type ResponseFromPeer = Vec<SerializedResponseContent>;
 
 pub struct RequestFuture {
     action: PeerAction,
-    waiter: Mutex<Option<ReturnTypeYouNeed>>,
+    waiter: Mutex<Option<ResponseFromPeer>>,
     done: AtomicBool,
 }
 
@@ -73,7 +75,7 @@ impl RequestFuture {
         }
     }
 
-    fn wait_till_complete(&self) -> ReturnTypeYouNeed {
+    fn wait_till_complete(&self) -> ResponseFromPeer {
         while !self.done.load(core::sync::atomic::Ordering::Acquire) {
             thread::yield_now();
         }
