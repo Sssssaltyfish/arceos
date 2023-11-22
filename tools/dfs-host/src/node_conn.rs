@@ -236,6 +236,8 @@ impl DfsNodeInConn {
     }
 
     fn handle_outer_init_index(&mut self, index_map: DashMap<String, NodeID>) {
-        self.file_index = index_map.into();
+        for entry in index_map.iter() {
+            (&self.file_index).insert(entry.key().clone(), *entry.value());
+        }
     }
 }

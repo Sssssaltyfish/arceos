@@ -18,7 +18,7 @@ fn main() {
     use std::env;
 
     env_logger::builder()
-        .filter_level(logger::LevelFilter::Info)
+        .filter_level(logger::LevelFilter::Debug)
         .init();
     let args: Vec<String> = env::args().collect();
     let node_id: u32 = args[1].parse().unwrap();
