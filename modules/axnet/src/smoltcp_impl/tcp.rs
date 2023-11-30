@@ -1,4 +1,5 @@
 use core::cell::UnsafeCell;
+use core::fmt::Debug;
 use core::net::SocketAddr;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
@@ -516,6 +517,15 @@ impl axio::Write for TcpSocket {
 
     fn flush(&mut self) -> AxResult {
         Ok(())
+    }
+}
+
+impl Debug for TcpSocket {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TcpSocket")
+            .field("local_addr", &self.local_addr())
+            .field("peer_addr", &self.peer_addr())
+            .finish_non_exhaustive()
     }
 }
 
