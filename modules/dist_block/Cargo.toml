@@ -8,7 +8,10 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 axnet = { path = "../axnet" }
+driver_common = { path = "../../crates/driver_common" }
 driver_block = { path = "../../crates/driver_block" }
+
+spin = { version = "0.9.8", default-features = false, features = ["rwlock"] }
 
 dashmap = { version = "3.8.0", default-features = false, features = [
     "no_std",

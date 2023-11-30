@@ -972,7 +972,9 @@ dependencies = [
  "axnet",
  "dashmap",
  "driver_block",
+ "driver_common",
  "log",
+ "spin 0.9.8",
 ]
 
 [[package]]

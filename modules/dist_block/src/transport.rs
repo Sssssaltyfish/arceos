@@ -1,5 +1,7 @@
 #[derive(Clone, Debug)]
-pub struct TransportError {}
+pub enum TransportError {
+    NotSupported,
+}
 
 /// Abstract transport
 pub trait Transport: Send + Sync {
@@ -12,5 +14,24 @@ pub trait Transport: Send + Sync {
     /// set block by block id
     fn set(&self, nid: u64, bid: u64, buf: &[u8]) -> Result<(), TransportError>;
     /// allocate an unused block id
-    fn next(&self) -> u64;
+    fn next_bid(&self) -> Option<u64>;
+
+    /// mark a block as unused
+    #[allow(unused)]
+    fn discard(&self, nid: u64, bid: u64) -> Result<(), TransportError> {
+        Err(TransportError::NotSupported)
+    }
+    /// compare-and-swap a block by block id,
+    /// which allows easier implementation for high-performance data modification
+    /// when concurrent write occurs
+    #[allow(unused)]
+    fn compare_and_swap(
+        &self,
+        nid: u64,
+        bid: u64,
+        old: &[u8],
+        new: &[u8],
+    ) -> Result<(), TransportError> {
+        Err(TransportError::NotSupported)
+    }
 }
