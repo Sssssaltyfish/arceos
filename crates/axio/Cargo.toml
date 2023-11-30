@@ -11,7 +11,7 @@ documentation = "https://rcore-os.github.io/arceos/axio/index.html"
 
 [features]
 alloc = []
-default = []
+default = ["alloc"]
 
 [dependencies]
 axerrno = { path = "../axerrno" }

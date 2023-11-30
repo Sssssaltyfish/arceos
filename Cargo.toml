@@ -48,6 +48,8 @@ members = [
     "modules/axsync",
     "modules/axtask",
 
+    "modules/dist_block",
+
     "api/axfeat",
     "api/arceos_api",
     "api/arceos_posix_api",
@@ -81,3 +83,5 @@ lto = true
 crate_interface = { path = "crates/crate_interface" }
 compact_str = { path = "patches/compact_str/compact_str" }
 noline = { path = "patches/noline/noline" }
+num_cpus = { path = "patches/num_cpus" }
+dashmap = { path = "patches/dashmap" }

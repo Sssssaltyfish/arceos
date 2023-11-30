@@ -1,0 +1,17 @@
+[package]
+name = "dist_block"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4"
+axnet = { path = "../axnet" }
+driver_block = { path = "../../crates/driver_block" }
+
+dashmap = { version = "3.8.0", default-features = false, features = [
+    "no_std",
+    "serde",
+    "axstd",
+] }
