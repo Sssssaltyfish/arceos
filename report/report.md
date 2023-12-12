@@ -47,36 +47,36 @@ pub struct NodeWrapper {
 其实现了 `VfsNodeOps`, 从而在操作系统看起来可和一般文件系统树中的节点无异地操作. 其中保存的 `relpath` 为相对于 DFS 根节点的路径, 在收到文件系统相关的 syscall 也即收到 `VfsNodeOps` 中定义的操作时, 其将操作和路径通过 TCP socket 发送给服务器, 并阻塞地等待服务器回复后检查返回值. 以 `read_at` 的实现为例:
 
 ```rust
-    fn read_at(&self, offset: u64, buf: &mut [u8]) -> VfsResult<usize> {
-        log::debug!("distfs: read_at");
-        let length = buf.len() as _;
-        let data = self.try_get_data()?;
-        let conn = &data.conn;
-        send_fsop(
-            Request::new(&self.relpath, request::Read { length, offset }.into()),
-            &conn,
-        )?;
-        let stat: Response<u64> = recv_fsop(&conn)?;
+fn read_at(&self, offset: u64, buf: &mut [u8]) -> VfsResult<usize> {
+    log::debug!("distfs: read_at");
+    let length = buf.len() as _;
+    let data = self.try_get_data()?;
+    let conn = &data.conn;
+    send_fsop(
+        Request::new(&self.relpath, request::Read { length, offset }.into()),
+        &conn,
+    )?;
+    let stat: Response<u64> = recv_fsop(&conn)?;
 
-        // If error code is returned, early exit;
-        // otherwise recv content of file.
-        let size = stat.map_code()? as usize;
-        if size == 0 {
-            return Ok(0);
-        }
-        let ret = conn.recv(buf)?;
-        match size.cmp(&ret) {
-            core::cmp::Ordering::Less => panic!(
-                "recved {} bytes while expecting {} bytes, which implies severe logical bug",
-                ret, size
-            ),
-            core::cmp::Ordering::Equal => Ok(size),
-            core::cmp::Ordering::Greater => ax_err!(
-                UnexpectedEof,
-                format_args!("recved {} bytes while expecting {} bytes", ret, size)
-            ),
-        }
+    // If error code is returned, early exit;
+    // otherwise recv content of file.
+    let size = stat.map_code()? as usize;
+    if size == 0 {
+        return Ok(0);
     }
+    let ret = conn.recv(buf)?;
+    match size.cmp(&ret) {
+        core::cmp::Ordering::Less => panic!(
+            "recved {} bytes while expecting {} bytes, which implies severe logical bug",
+            ret, size
+        ),
+        core::cmp::Ordering::Equal => Ok(size),
+        core::cmp::Ordering::Greater => ax_err!(
+            UnexpectedEof,
+            format_args!("recved {} bytes while expecting {} bytes", ret, size)
+        ),
+    }
+}
 ```
 
 其在 `send_fsop` 将所需操作发至服务端后通过 `recv_fsop` 等待服务端返回操作状态, 并在之后接受读取的文件内容.
@@ -97,11 +97,48 @@ pub struct NodeWrapper {
 
 实现上, 服务端保存着由客户端发起的长连接 (图中的 `DfsClientConn`) 与分布式系统中其它节点加入时发起的双向长连接 (图中的 `DfsNodeInConn` 和 `DfsNodeOutConn`). 为保持可用性, 连接之间是并发的, 每个连接对应着节点上的一个处理线程, 线程之间通过消息队列进行通信. 对于客户端发起的一个请求, 其处理流程如下:
 
+![处理流程](./report.assets/control.png)
 
+客户端在收到 syscall 之后通过 TCP 连接发送请求, 服务端中的处理线程 `DfsClientConn` 收到后通过查询文件索引得知文件所处在的节点, 如处在本节点则直接处理文件操作并通过连接返回; 如不处在本节点则通过持有对应节点长连接的 `DfsNodeOutConn` 发送请求至对应的节点 `DfsNodeInConn` 线程处理. 实现上 `DfsNodeOutConn` 持有一个并发消息队列以处理来自多个客户端 (也就是来自多个 `DfsClientConn` 线程) 的请求. 处理文件操作的方式为调用服务端所运行于的操作系统的文件 api, 通过类似 bind mount 的方式处理数据.
+
+`tools/dfs-host/src/host.rs` 实现了初始化监听来自其它节点和客户端的连接的逻辑, `DfsClientConn` 实现于 `tools/dfs-host/src/client_conn.rs`, `DfsNodeInConn`/`DfsNodeOutConn` 实现于 `tools/dfs-host/src/node_conn.rs`. 各连接之间数据的序列化/反序列化使用 `bincode` 处理.
 
 ### 一致性
 
-DFS 保证对于某个客户端看来, 文件的数据读写有着顺序一致性; 也即所有节点及节点内的并发操作同意它们之间的某种未指定的读写顺序, 而对于某个客户端而言, 其读写操作有着按照发起时间确定的顺序. 这由以下几点所保证:
+DFS 保证对于某个客户端看来, 文件的数据读写有着顺序一致性; 也即所有节点及节点内的并发操作同意它们之间的某种未指定的读写顺序, 而对于某个客户端而言, 其读写操作有着按照发起时间确定的顺序. 同时, 每个客户端发起的每个 syscall 都应该造成原子的结果. 这由以下几点所保证:
 
-- 
+- 任一文件数据唯一储存在一个服务端节点上, 这降低了并发性和分区可用性, 但简化了文件数据的一致性问题: 只要节点内部对文件数据的操作保证顺序一致性, 则分布式系统保证对文件数据的顺序一致性.
 
+- 一般地讲, 要在并发的情况下保证在节点内对文件数据的操作为顺序一致的, 需要顺序化在文件数据上的写操作, 也就是让文件数据被读写锁保护; 由于 Linux 上常见的文件系统本身保证在并发情况下对文件数据的顺序一致性, 在客户端运行于 Linux 上时无需额外加锁, 直接并发地使用文件系统 api 即可.
+
+实现中对文件的索引仅保证一种稍强于最终一致性的一致性. 操作文件索引的操作可能没有效果, 并且系统中可能短暂存在文件索引的不一致; 但在单个节点内文件的索引上不存在并发冲突, 整个系统经过一定时间后 (一个文件数据操作时间内没有对索引的写操作), 系统的索引达到某种一致状态.
+
+## 支持性工作
+
+这部分工作为实现 DFS 过程中对 ArceOS 进行的一些可用性改进, 可 cherry-pick 后无需多少修改合并至主线中.
+
+- 修改了原 ArceOS 中挂载点的实现方式.
+
+  原 ArceOS 中的 `MountPoint` 实现为:
+
+  ```rust
+  struct MountPoint {
+      path: &'static str,
+      fs: Arc<dyn VfsOps>,
+  }
+  ```
+
+  无法进行动态挂载, 只能在编译期设置好挂载点, 在 ArceOS 初始化时挂在 `/sys` 和 `/proc`. 修改后其定义见上, 并在 `axfs::root`/`axfs::api::mount`/`arceos_api::imp::fs::{ax_mount, ax_umount}` 中实现/完善了 `mount`/`umount` 这一对 api, 支持类似 Linux 的 `mount` 调用:
+
+  ```shell
+  mount <mount from resource> <mount to absolute path> <fstype>
+  umount <mounted absolute path>
+  ```
+
+- 用 patch 过的 [`noline`](https://github.com/Sssssaltyfish/noline) 重新实现了 `apps/fs/shell` 的主逻辑.
+
+  优化了 shell 应用的使用体验, 使之支持更多键盘快捷键及持久化的命令历史记录. patch 位于 `patches/noline`.
+
+- 修复了 `Makefile` 会在编译完成之前就开始执行 `qemu` 的问题, 并内置了 `OpenSBI` 的 binary 以方便在老版本的 `riscv-qemu` 上执行 ArceOS.
+
+- 为一些库添加了 ArceOS 支持, 位于 `patches`.
